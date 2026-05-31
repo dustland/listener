@@ -8,6 +8,8 @@
 
 /* Begin PBXBuildFile section */
 		0BDF15425500286E002C73A3 /* SessionManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 44CB56486ADF10B1195F55DC /* SessionManager.swift */; };
+		0296A7A398564419A74D58DA /* AppText.swift in Sources */ = {isa = PBXBuildFile; fileRef = D60C4B0D60394372A474E9BC /* AppText.swift */; };
+		163A4C026F5E4F669FE12D83 /* AppSettings.swift in Sources */ = {isa = PBXBuildFile; fileRef = 718C0D1758AB43F0B6056D1D /* AppSettings.swift */; };
 			1FB448016B7F48F42C6D3C37 /* SessionDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = CBA5FD34CB941A6F3A7ED5E9 /* SessionDetailView.swift */; };
 			2E8594D5F0EC4C04A4C49D1A /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 9F4F5E35D6124C6A9D0B8CC0 /* Assets.xcassets */; };
 			3428626F803B086146527DF5 /* Models.swift in Sources */ = {isa = PBXBuildFile; fileRef = CFEC06B3B465467032A6E09C /* Models.swift */; };
@@ -15,6 +17,7 @@
 		58543F30282A0939DE905550 /* RecordingHUDView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9CEA535C9089C837C565D893 /* RecordingHUDView.swift */; };
 		80AD4F5DD28E405E6B8FE538 /* HomeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4A1C6FDBDD568C8FD73E6CC1 /* HomeView.swift */; };
 		929FB10E16C4848796BA8DA6 /* AudioRecorderManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 47A6173AA842150032326131 /* AudioRecorderManager.swift */; };
+		A0E925D0B8D04E268A9F63C3 /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E0766D5C86D746EF93B12F72 /* SettingsView.swift */; };
 		B8788DFFB5D612C7077B5D19 /* WatchConnectivityManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8E1D34961B6D9546EF556B14 /* WatchConnectivityManager.swift */; };
 		BA269C817DAC8A6C35D694FE /* DialectListenerApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1B8A5191B629E3E4DDD752C5 /* DialectListenerApp.swift */; };
 		BDC690D6B01857B4B99F55DA /* AppleASRService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9C7801A7F799FD58625E423F /* AppleASRService.swift */; };
@@ -31,11 +34,14 @@
 			65FC1AAEF58A470335B205D5 /* WatchConnectivityProtocol.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WatchConnectivityProtocol.swift; sourceTree = "<group>"; };
 			8E1D34961B6D9546EF556B14 /* WatchConnectivityManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WatchConnectivityManager.swift; sourceTree = "<group>"; };
 			9C7801A7F799FD58625E423F /* AppleASRService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppleASRService.swift; sourceTree = "<group>"; };
+			718C0D1758AB43F0B6056D1D /* AppSettings.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppSettings.swift; sourceTree = "<group>"; };
+			D60C4B0D60394372A474E9BC /* AppText.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppText.swift; sourceTree = "<group>"; };
 			9CEA535C9089C837C565D893 /* RecordingHUDView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RecordingHUDView.swift; sourceTree = "<group>"; };
 			9F4F5E35D6124C6A9D0B8CC0 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 			CBA5FD34CB941A6F3A7ED5E9 /* SessionDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SessionDetailView.swift; sourceTree = "<group>"; };
 			CFEC06B3B465467032A6E09C /* Models.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Models.swift; sourceTree = "<group>"; };
 			F4C9C6302F704431B03125AF /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
+			E0766D5C86D746EF93B12F72 /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXGroup section */
@@ -65,9 +71,11 @@
 		};
 		5FD8B3DD0C07239DA77BCF28 /* Models */ = {
 			isa = PBXGroup;
-			children = (
-				CFEC06B3B465467032A6E09C /* Models.swift */,
-			);
+				children = (
+					718C0D1758AB43F0B6056D1D /* AppSettings.swift */,
+					D60C4B0D60394372A474E9BC /* AppText.swift */,
+					CFEC06B3B465467032A6E09C /* Models.swift */,
+				);
 			path = Models;
 			sourceTree = "<group>";
 		};
@@ -116,10 +124,11 @@
 		BD89043E67CF46F7163928BA /* Views */ = {
 			isa = PBXGroup;
 			children = (
-				4A1C6FDBDD568C8FD73E6CC1 /* HomeView.swift */,
-				9CEA535C9089C837C565D893 /* RecordingHUDView.swift */,
-				CBA5FD34CB941A6F3A7ED5E9 /* SessionDetailView.swift */,
-			);
+					4A1C6FDBDD568C8FD73E6CC1 /* HomeView.swift */,
+					9CEA535C9089C837C565D893 /* RecordingHUDView.swift */,
+					CBA5FD34CB941A6F3A7ED5E9 /* SessionDetailView.swift */,
+					E0766D5C86D746EF93B12F72 /* SettingsView.swift */,
+				);
 			path = Views;
 			sourceTree = "<group>";
 		};
@@ -192,12 +201,15 @@
 		18C548B8099F13066D761C60 /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
-			files = (
-				BDC690D6B01857B4B99F55DA /* AppleASRService.swift in Sources */,
+				files = (
+					0296A7A398564419A74D58DA /* AppText.swift in Sources */,
+					163A4C026F5E4F669FE12D83 /* AppSettings.swift in Sources */,
+					BDC690D6B01857B4B99F55DA /* AppleASRService.swift in Sources */,
 				929FB10E16C4848796BA8DA6 /* AudioRecorderManager.swift in Sources */,
 				BA269C817DAC8A6C35D694FE /* DialectListenerApp.swift in Sources */,
-				80AD4F5DD28E405E6B8FE538 /* HomeView.swift in Sources */,
-				3428626F803B086146527DF5 /* Models.swift in Sources */,
+					80AD4F5DD28E405E6B8FE538 /* HomeView.swift in Sources */,
+					A0E925D0B8D04E268A9F63C3 /* SettingsView.swift in Sources */,
+					3428626F803B086146527DF5 /* Models.swift in Sources */,
 				58543F30282A0939DE905550 /* RecordingHUDView.swift in Sources */,
 				1FB448016B7F48F42C6D3C37 /* SessionDetailView.swift in Sources */,
 				0BDF15425500286E002C73A3 /* SessionManager.swift in Sources */,

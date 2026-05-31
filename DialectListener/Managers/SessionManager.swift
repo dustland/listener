@@ -1,6 +1,7 @@
 import Foundation
 import SwiftData
 import SwiftUI
+import UIKit
 import OSLog
 
 /// The central controller coordinating audio recording, Watch synchronization, database persistence, and processing pipeline on the iPhone.
@@ -15,6 +16,7 @@ public final class SessionManager {
     public let recorderManager: AudioRecorderManager
     public let asrService: ASRServiceProtocol
     public let translationService: TranslationServiceProtocol
+    public let appSettings: AppSettings
     
     // SwiftData Context Holder
     private var modelContext: ModelContext?
@@ -25,7 +27,7 @@ public final class SessionManager {
     public var isRecordingLocally: Bool = false
     public var isPermissionsGranted: Bool = false
     public var liveTranscriptLines: [TranscriptLine] = []
-    public var liveTranslationStatus: String = "Waiting for speech..."
+    public var liveTranslationStatus: String = AppText.t("Waiting for speech...", "等待语音...")
     
     // Simulated timer for periodic status updates back to the watch
     private var watchSyncTimer: Timer?
@@ -36,12 +38,14 @@ public final class SessionManager {
         connectivityManager: WatchConnectivityManager? = nil,
         recorderManager: AudioRecorderManager? = nil,
         asrService: ASRServiceProtocol? = nil,
-        translationService: TranslationServiceProtocol? = nil
+        translationService: TranslationServiceProtocol? = nil,
+        appSettings: AppSettings? = nil
     ) {
         self.connectivityManager = connectivityManager ?? WatchConnectivityManager()
         self.recorderManager = recorderManager ?? AudioRecorderManager()
         self.asrService = asrService ?? AppleASRService()
         self.translationService = translationService ?? SmartTranslationService()
+        self.appSettings = appSettings ?? AppSettings()
         
         setupConnectivityCallbacks()
         checkPermissions()
@@ -79,9 +83,10 @@ public final class SessionManager {
             logger.info("Starting new session with ID: \(sessionId)")
 
             liveTranscriptLines = []
-            liveTranslationStatus = "Listening..."
+            liveTranslationStatus = AppText.t("Listening...", "倾听中...")
             lastTranslatedSnapshot = ""
 
+            asrService.setLocaleIdentifier(appSettings.sourceLanguage.localeIdentifier)
             try asrService.startLiveTranscription { [weak self] result in
                 Task { @MainActor in
                     self?.handleLiveTranscription(result)
@@ -94,7 +99,11 @@ public final class SessionManager {
             }
 
             // 1. Start audio recording and stream buffers into live ASR
-            let fileURL = try recorderManager.startRecording(sessionId: sessionId)
+            let fileURL = try recorderManager.startRecording(
+                sessionId: sessionId,
+                listeningMode: appSettings.listeningMode,
+                micSensitivity: appSettings.micSensitivity
+            )
             
             // 2. Save Session object in SwiftData database
             let session = Session(id: sessionId, startTime: Date(), audioFilePath: fileURL.lastPathComponent)
@@ -104,6 +113,7 @@ public final class SessionManager {
             // 3. Update active states
             self.activeSession = session
             self.isRecordingLocally = true
+            UIApplication.shared.isIdleTimerDisabled = appSettings.keepScreenAwake
             
             // 4. Calibrate Connectivity Manager
             connectivityManager.activeSessionId = sessionId
@@ -138,6 +148,7 @@ public final class SessionManager {
             recorderManager.onAudioBuffer = nil
             asrService.stopLiveTranscription()
             liveTranslationTask?.cancel()
+            UIApplication.shared.isIdleTimerDisabled = false
             
             // 2. Stop watch sync loop
             stopWatchSyncLoop()
@@ -272,7 +283,7 @@ public final class SessionManager {
             }
             scheduleLiveTranslation()
         case .failure(let error):
-            liveTranslationStatus = "Speech recognition paused: \(error.localizedDescription)"
+            liveTranslationStatus = AppText.t("Speech recognition paused", "语音识别已暂停") + ": \(error.localizedDescription)"
         }
     }
 
@@ -282,8 +293,8 @@ public final class SessionManager {
             .joined(separator: "\n")
             .trimmingCharacters(in: .whitespacesAndNewlines)
 
-        guard !snapshot.isEmpty, snapshot != lastTranslatedSnapshot else { return }
-        liveTranslationStatus = "Translating..."
+        guard appSettings.liveTranslationEnabled, !snapshot.isEmpty, snapshot != lastTranslatedSnapshot else { return }
+        liveTranslationStatus = AppText.t("Translating...", "翻译中...")
         liveTranslationTask?.cancel()
 
         liveTranslationTask = Task { [weak self] in
@@ -295,12 +306,13 @@ public final class SessionManager {
                 let segments = lines.map {
                     SpeechSegment(start: $0.startTimestamp, end: $0.endTimestamp, text: $0.dialectText)
                 }
-                let translatedLines = try await self.translationService.translate(segments)
+                let target = await MainActor.run { self.appSettings.translationTarget }
+                let translatedLines = try await self.translationService.translate(segments, target: target)
 
                 await MainActor.run {
                     self.liveTranscriptLines = translatedLines
                     self.lastTranslatedSnapshot = snapshot
-                    self.liveTranslationStatus = "Live translation"
+                    self.liveTranslationStatus = AppText.t("Live translation", "实时翻译")
                     self.activeSession?.transcript = translatedLines
                     self.activeSession?.isProcessed = true
                     try? self.modelContext?.save()
@@ -309,7 +321,7 @@ public final class SessionManager {
                 return
             } catch {
                 await MainActor.run {
-                    self?.liveTranslationStatus = "Using local translation fallback"
+                    self?.liveTranslationStatus = AppText.t("Using local translation fallback", "正在使用本地翻译")
                 }
             }
         }

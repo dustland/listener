@@ -24,6 +24,7 @@ public protocol ASRServiceProtocol {
     func startLiveTranscription(onUpdate: @escaping (Result<LiveTranscriptionUpdate, Error>) -> Void) throws
     func appendAudioBuffer(_ buffer: AVAudioPCMBuffer)
     func stopLiveTranscription()
+    func setLocaleIdentifier(_ identifier: String)
 }
 
 /// Concrete implementation of speech-to-text using Apple's native SFSpeechRecognizer.
@@ -31,7 +32,7 @@ public protocol ASRServiceProtocol {
 public final class AppleASRService: ASRServiceProtocol {
     
     private let logger = Logger(subsystem: "com.dustland.DialectListener", category: "AppleASRService")
-    private let locale = Locale(identifier: "zh-HK") // Default dialect profile for the first release
+    private var localeIdentifier = "zh-HK"
     private var liveRecognitionRequest: SFSpeechAudioBufferRecognitionRequest?
     private var liveRecognitionTask: SFSpeechRecognitionTask?
     
@@ -53,8 +54,9 @@ public final class AppleASRService: ASRServiceProtocol {
     
     /// Asynchronously transcribes a local audio file and returns a list of time-stamped speech segments.
     public func transcribe(audioURL: URL) async throws -> [SpeechSegment] {
+        let locale = Locale(identifier: localeIdentifier)
         guard let recognizer = SFSpeechRecognizer(locale: locale) else {
-            logger.error("SFSpeechRecognizer could not be initialized for locale \(self.locale.identifier).")
+            logger.error("SFSpeechRecognizer could not be initialized for locale \(locale.identifier).")
             throw NSError(domain: "AppleASRService", code: 1, userInfo: [NSLocalizedDescriptionKey: "Speech recognizer is not supported for the selected dialect on this device."])
         }
         
@@ -112,6 +114,7 @@ public final class AppleASRService: ASRServiceProtocol {
     public func startLiveTranscription(onUpdate: @escaping (Result<LiveTranscriptionUpdate, Error>) -> Void) throws {
         stopLiveTranscription()
 
+        let locale = Locale(identifier: localeIdentifier)
         guard let recognizer = SFSpeechRecognizer(locale: locale) else {
             throw NSError(domain: "AppleASRService", code: 1, userInfo: [NSLocalizedDescriptionKey: "Speech recognizer is not supported for the selected dialect on this device."])
         }
@@ -149,6 +152,10 @@ public final class AppleASRService: ASRServiceProtocol {
         liveRecognitionTask?.cancel()
         liveRecognitionRequest = nil
         liveRecognitionTask = nil
+    }
+
+    public func setLocaleIdentifier(_ identifier: String) {
+        localeIdentifier = identifier
     }
 
     private static func makeSegments(from transcription: SFTranscription) -> [SpeechSegment] {

@@ -1,14 +1,14 @@
 import SwiftUI
 import SwiftData
 
-/// Home dashboard view of Dialect Listener on iPhone.
+/// Home dashboard view of Dialecter on iPhone.
 /// Offers direct control to start a listening session and shows a history list of past recordings.
 public struct HomeView: View {
     
     @Environment(\.modelContext) private var modelContext
     @State private var sessionManager = SessionManager()
-    @State private var isPulseAnimating = false
     @State private var selectedSessionForDetail: Session? = nil
+    @State private var isShowingSettings = false
     
     public init() {}
     
@@ -18,128 +18,83 @@ public struct HomeView: View {
                 // Premium deep dark background with gradient glow
                 Color.black.ignoresSafeArea()
                 
-                RadialGradient(
-                    gradient: Gradient(colors: [Color.red.opacity(0.12), Color.black]),
-                    center: .top,
-                    startRadius: 2,
-                    endRadius: 500
-                )
-                .ignoresSafeArea()
-                
-                VStack(spacing: 24) {
-                    // Header Status HUD
+                VStack(spacing: 18) {
                     HStack {
-                        VStack(alignment: .leading, spacing: 4) {
-                            Text("Dialect Listener")
-                                .font(.system(.title, design: .rounded))
-                                .fontWeight(.black)
+                        VStack(alignment: .leading, spacing: 3) {
+                            Text("Dialecter")
+                                .font(.system(.title2, design: .rounded))
+                                .fontWeight(.bold)
                                 .foregroundColor(.white)
                             
-                            Text(sessionManager.isRecordingLocally ? "Session in Progress..." : "Ready to listen")
-                                .font(.system(.subheadline, design: .rounded))
-                                .foregroundColor(sessionManager.isRecordingLocally ? .red : .secondary)
+                            Text(AppText.t("方言家", "方言家"))
+                                .font(.system(.footnote, design: .rounded))
+                                .foregroundColor(.secondary)
                         }
+
                         Spacer()
-                        
-                        // Status Indicator
+
                         HStack(spacing: 6) {
                             Circle()
-                                .fill(sessionManager.isRecordingLocally ? Color.red : Color.green)
-                                .frame(width: 8, height: 8)
-                                .shadow(color: sessionManager.isRecordingLocally ? .red : .green, radius: 4)
-                            
-                            Text(sessionManager.isRecordingLocally ? "RECORDING" : "STANDBY")
+                                .fill(sessionManager.isRecordingLocally ? Color.red.opacity(0.9) : Color.green.opacity(0.75))
+                                .frame(width: 7, height: 7)
+
+                            Text(sessionManager.isRecordingLocally ? AppText.t("Listening", "倾听中") : AppText.t("Ready", "就绪"))
                                 .font(.system(.caption, design: .monospaced))
-                                .fontWeight(.bold)
                                 .foregroundColor(.secondary)
                         }
                         .padding(.horizontal, 10)
-                        .padding(.vertical, 5)
+                        .padding(.vertical, 6)
                         .background(Color.white.opacity(0.06))
-                        .cornerRadius(16)
+                        .clipShape(Capsule())
+
+                        Button(action: {
+                            isShowingSettings = true
+                        }) {
+                            Image(systemName: "gearshape")
+                                .font(.system(size: 18, weight: .semibold))
+                                .foregroundColor(.secondary)
+                                .frame(width: 36, height: 36)
+                                .background(Color.white.opacity(0.06))
+                                .clipShape(Circle())
+                        }
                     }
                     .padding(.horizontal)
-                    .padding(.top, 10)
-                    
-                    // Main Start circular button with premium pulse animation
-                    VStack {
-                        Spacer()
-                        
-                        Button(action: {
-                            if sessionManager.isRecordingLocally {
-                                sessionManager.stopSession()
-                            } else {
-                                sessionManager.startSession()
-                            }
-                        }) {
-                            ZStack {
-                                // Double outer pulse rings
-                                Circle()
-                                    .stroke(sessionManager.isRecordingLocally ? Color.red.opacity(0.4) : Color.red.opacity(0.25), lineWidth: isPulseAnimating ? 20 : 2)
-                                    .scaleEffect(isPulseAnimating ? 1.3 : 0.95)
-                                    .opacity(isPulseAnimating ? 0.0 : 1.0)
-                                    .animation(
-                                        .easeInOut(duration: 2.0)
-                                        .repeatForever(autoreverses: false),
-                                        value: isPulseAnimating
-                                    )
-                                
-                                Circle()
-                                    .fill(
-                                        LinearGradient(
-                                            gradient: Gradient(colors: sessionManager.isRecordingLocally ? [Color.red, Color.orange] : [Color.red.opacity(0.85), Color.red]),
-                                            startPoint: .topLeading,
-                                            endPoint: .bottomTrailing
-                                        )
-                                    )
-                                    .frame(width: 140, height: 140)
-                                    .shadow(color: .red.opacity(0.4), radius: 15)
-                                
-                                VStack(spacing: 8) {
-                                    Image(systemName: sessionManager.isRecordingLocally ? "stop.fill" : "mic.fill")
-                                        .font(.system(size: 38, weight: .bold))
-                                        .foregroundColor(.white)
-                                        .scaleEffect(sessionManager.isRecordingLocally ? 0.9 : 1.0)
-                                    
-                                    Text(sessionManager.isRecordingLocally ? "Tap to Stop" : "Start Listening")
-                                        .font(.system(.subheadline, design: .rounded))
-                                        .fontWeight(.bold)
-                                        .foregroundColor(.white)
-                                }
-                            }
-                        }
-                        .buttonStyle(PlainButtonStyle())
-                        .onAppear {
-                            isPulseAnimating = true
-                        }
-                        
-                        Spacer()
+                    .padding(.top, 14)
+
+                    VStack(alignment: .leading, spacing: 10) {
+                        Text(AppText.t("Meeting Notes", "会议字幕"))
+                            .font(.system(.headline, design: .rounded))
+                            .foregroundColor(.white)
+
+                        Text(AppText.t("Low-key live transcription and translation for dialect listening.", "低调实时识别与翻译，适合方言倾听练习。"))
+                            .font(.system(.subheadline, design: .rounded))
+                            .foregroundColor(.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
                     }
-                    .frame(height: 200)
-                    
-                    // Recent Sessions Header
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.horizontal)
+
                     HStack {
-                        Text("Recent Sessions")
+                        Text(AppText.t("Recent Sessions", "最近记录"))
                             .font(.system(.title3, design: .rounded))
                             .fontWeight(.bold)
                             .foregroundColor(.white)
-                        
+
                         Spacer()
                     }
                     .padding(.horizontal)
-                    
-                    // Session Cards Scroll view
+
                     if sessionManager.recentSessions.isEmpty {
                         VStack(spacing: 12) {
-                            Image(systemName: "square.and.pencil.circle.fill")
+                            Image(systemName: "text.bubble.fill")
                                 .font(.system(size: 48))
                                 .foregroundColor(.white.opacity(0.15))
                             
-                            Text("No recorded sessions yet")
+                            Text(AppText.t("No sessions yet", "还没有记录"))
                                 .font(.system(.body, design: .rounded))
                                 .foregroundColor(.secondary)
                             
-                            Text("Tap the record button to capture daily conversations and practice listening.")
+                            Text(AppText.t("Start a low-key listening session when you are ready.", "准备好后开始一次低调倾听。"))
                                 .font(.system(.footnote, design: .rounded))
                                 .foregroundColor(.secondary.opacity(0.8))
                                 .multilineTextAlignment(.center)
@@ -168,6 +123,10 @@ public struct HomeView: View {
                         .listStyle(PlainListStyle())
                         .scrollContentBackground(.hidden)
                     }
+
+                    listenControlBar
+                        .padding(.horizontal)
+                        .padding(.bottom, 18)
                 }
             }
             .onAppear {
@@ -179,6 +138,49 @@ public struct HomeView: View {
             .sheet(item: $selectedSessionForDetail) { session in
                 SessionDetailView(session: session)
             }
+            .sheet(isPresented: $isShowingSettings) {
+                SettingsView(settings: sessionManager.appSettings)
+            }
+        }
+    }
+
+    private var listenControlBar: some View {
+        HStack(spacing: 12) {
+            Button(action: toggleListening) {
+                Image(systemName: sessionManager.isRecordingLocally ? "stop.fill" : "mic.fill")
+                    .font(.system(size: 16, weight: .bold))
+                    .foregroundColor(sessionManager.isRecordingLocally ? .red : .cyan)
+                    .frame(width: 42, height: 42)
+                    .background(Color.white.opacity(0.08))
+                    .clipShape(Circle())
+            }
+
+            VStack(alignment: .leading, spacing: 3) {
+                Text(sessionManager.isRecordingLocally ? AppText.t("Listening quietly", "低调倾听中") : AppText.t("Start listening", "开始倾听"))
+                    .font(.system(.subheadline, design: .rounded))
+                    .fontWeight(.semibold)
+                    .foregroundColor(.white)
+                Text("\(sessionManager.appSettings.sourceLanguage.title) · \(sessionManager.appSettings.listeningMode.title) · \(sessionManager.appSettings.micSensitivity.title)")
+                    .font(.system(.caption, design: .rounded))
+                    .foregroundColor(.secondary)
+            }
+
+            Spacer()
+        }
+        .padding(12)
+        .background(Color.white.opacity(0.05))
+        .overlay(
+            RoundedRectangle(cornerRadius: 18)
+                .stroke(Color.white.opacity(0.08), lineWidth: 1)
+        )
+        .cornerRadius(18)
+    }
+
+    private func toggleListening() {
+        if sessionManager.isRecordingLocally {
+            sessionManager.stopSession()
+        } else {
+            sessionManager.startSession()
         }
     }
 }

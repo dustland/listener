@@ -12,9 +12,9 @@ public struct RecordingHUDView: View {
             // Absolute black background to fit street and subway low-profile use
             Color.black.ignoresSafeArea()
             
-            // Atmospheric radial red glow
+            // Subtle low-light glow for a notes-style recording surface.
             RadialGradient(
-                gradient: Gradient(colors: [Color.red.opacity(0.15), Color.black]),
+                gradient: Gradient(colors: [Color.cyan.opacity(0.08), Color.black]),
                 center: .center,
                 startRadius: 2,
                 endRadius: 400
@@ -27,19 +27,19 @@ public struct RecordingHUDView: View {
                 VStack(spacing: 8) {
                     HStack(spacing: 6) {
                         Circle()
-                            .fill(Color.red)
+                            .fill(Color.cyan)
                             .frame(width: 8, height: 8)
                             .opacity(isWaveformAnimating ? 0.3 : 1.0)
                             .animation(.easeInOut(duration: 0.8).repeatForever(autoreverses: true), value: isWaveformAnimating)
                         
-                        Text("RECORDING SESSION")
+                        Text(AppText.t("LISTENING", "倾听中"))
                             .font(.system(.caption, design: .monospaced))
                             .fontWeight(.bold)
-                            .foregroundColor(.red)
+                            .foregroundColor(.cyan)
                             .tracking(2)
                     }
                     
-                    Text("Dialect Listener is recording surrounding audio...")
+                    Text(AppText.t("Dialecter is capturing live subtitles quietly.", "方言家正在低调生成实时字幕。"))
                         .font(.system(.caption2, design: .rounded))
                         .foregroundColor(.secondary)
                         .multilineTextAlignment(.center)
@@ -49,15 +49,15 @@ public struct RecordingHUDView: View {
                 
                 // Large stopwatch timer
                 Text(formatDuration(sessionManager.recorderManager.currentDuration))
-                    .font(.system(size: 64, weight: .bold, design: .monospaced))
+                    .font(.system(size: 52, weight: .bold, design: .monospaced))
                     .foregroundColor(.white)
-                    .shadow(color: .red.opacity(0.2), radius: 8)
+                    .shadow(color: .cyan.opacity(0.15), radius: 8)
                 
                 // Graphical audio wave animation
                 HStack(spacing: 4) {
                     ForEach(0..<8) { index in
                         RoundedRectangle(cornerRadius: 3)
-                            .fill(LinearGradient(colors: [.red, .orange], startPoint: .top, endPoint: .bottom))
+                            .fill(LinearGradient(colors: [.cyan.opacity(0.85), .blue.opacity(0.75)], startPoint: .top, endPoint: .bottom))
                             .frame(width: 6, height: isWaveformAnimating ? CGFloat.random(in: 12...68) : 24)
                             .animation(.easeInOut(duration: 0.3).repeatForever(autoreverses: true).delay(Double(index) * 0.05), value: isWaveformAnimating)
                     }
@@ -69,34 +69,26 @@ public struct RecordingHUDView: View {
 
                 LiveTranscriptPanel(
                     status: sessionManager.liveTranslationStatus,
-                    lines: sessionManager.liveTranscriptLines
+                    lines: sessionManager.liveTranscriptLines,
+                    showsTranscript: sessionManager.appSettings.liveTranscriptEnabled
                 )
                     .frame(maxHeight: .infinity)
                 
-                // Controls Group
                 VStack(spacing: 16) {
-                    // Massive Primary Bookmark Button
                     Button(action: {
                         sessionManager.addBookmark(at: sessionManager.recorderManager.currentDuration)
                     }) {
                         HStack(spacing: 10) {
                             Image(systemName: "bookmark.fill")
                                 .font(.title2)
-                            Text("Mark Unclear Phrase")
+                            Text(AppText.t("Mark Unclear Phrase", "标记没听清"))
                                 .fontWeight(.bold)
                         }
                         .frame(maxWidth: .infinity)
-                        .padding(.vertical, 18)
-                        .background(
-                            LinearGradient(
-                                gradient: Gradient(colors: [Color.blue.opacity(0.85), Color.indigo.opacity(0.9)]),
-                                startPoint: .topLeading,
-                                endPoint: .bottomTrailing
-                            )
-                        )
+                        .padding(.vertical, 14)
+                        .background(Color.white.opacity(0.08))
                         .foregroundColor(.white)
-                        .cornerRadius(18)
-                        .shadow(color: .blue.opacity(0.3), radius: 10)
+                        .cornerRadius(16)
                     }
                     .padding(.horizontal, 24)
                     
@@ -108,7 +100,7 @@ public struct RecordingHUDView: View {
                             Image(systemName: "stop.fill")
                                 .font(.body)
                                 .foregroundColor(.red)
-                            Text("Finish Session")
+                            Text(AppText.t("Finish Session", "结束记录"))
                                 .fontWeight(.bold)
                                 .foregroundColor(.red)
                         }
@@ -137,6 +129,7 @@ public struct RecordingHUDView: View {
 private struct LiveTranscriptPanel: View {
     let status: String
     let lines: [TranscriptLine]
+    let showsTranscript: Bool
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -148,7 +141,9 @@ private struct LiveTranscriptPanel: View {
                 Spacer()
             }
 
-            if lines.isEmpty {
+            if !showsTranscript {
+                LiveTranscriptDisabledState()
+            } else if lines.isEmpty {
                 LiveTranscriptEmptyState()
             } else {
                 ScrollViewReader { proxy in
@@ -180,13 +175,28 @@ private struct LiveTranscriptPanel: View {
     }
 }
 
+private struct LiveTranscriptDisabledState: View {
+    var body: some View {
+        VStack(spacing: 10) {
+            Image(systemName: "captions.bubble")
+                .font(.system(size: 34))
+                .foregroundColor(.white.opacity(0.22))
+            Text(AppText.t("Live captions are hidden for this session.", "本次记录已隐藏实时字幕。"))
+                .font(.system(.footnote, design: .rounded))
+                .foregroundColor(.secondary)
+                .multilineTextAlignment(.center)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+}
+
 private struct LiveTranscriptEmptyState: View {
     var body: some View {
         VStack(spacing: 10) {
             Image(systemName: "waveform.and.mic")
                 .font(.system(size: 34))
                 .foregroundColor(.white.opacity(0.25))
-            Text("Live transcript will appear here as speech is detected.")
+            Text(AppText.t("Live transcript will appear here as speech is detected.", "识别到语音后，实时字幕会显示在这里。"))
                 .font(.system(.footnote, design: .rounded))
                 .foregroundColor(.secondary)
                 .multilineTextAlignment(.center)
@@ -206,7 +216,7 @@ private struct LiveTranscriptRow: View {
                 .foregroundColor(.white)
                 .fixedSize(horizontal: false, vertical: true)
 
-            Text(line.translationText.isEmpty ? "Translating..." : line.translationText)
+            Text(line.translationText.isEmpty ? AppText.t("Translating...", "翻译中...") : line.translationText)
                 .font(.system(.subheadline, design: .rounded))
                 .foregroundColor(line.translationText.isEmpty ? .secondary : .cyan.opacity(0.9))
                 .fixedSize(horizontal: false, vertical: true)

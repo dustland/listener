@@ -3,7 +3,13 @@ import OSLog
 
 /// Pluggable translation service to convert colloquial dialect text to written Mandarin Chinese.
 public protocol TranslationServiceProtocol {
-    func translate(_ segments: [SpeechSegment]) async throws -> [TranscriptLine]
+    func translate(_ segments: [SpeechSegment], target: TranslationTarget) async throws -> [TranscriptLine]
+}
+
+public extension TranslationServiceProtocol {
+    func translate(_ segments: [SpeechSegment]) async throws -> [TranscriptLine] {
+        try await translate(segments, target: .simplifiedChinese)
+    }
 }
 
 /// A premium translation service using OpenRouter to produce high-fidelity written Chinese.
@@ -26,7 +32,7 @@ public final class OpenRouterTranslationService: TranslationServiceProtocol {
         self.model = model
     }
     
-    public func translate(_ segments: [SpeechSegment]) async throws -> [TranscriptLine] {
+    public func translate(_ segments: [SpeechSegment], target: TranslationTarget = .simplifiedChinese) async throws -> [TranscriptLine] {
         guard let apiKey = apiKey, !apiKey.isEmpty else {
             logger.warning("OpenRouter API Key missing. Falling back to local translation engine.")
             throw NSError(domain: "OpenRouterTranslationService", code: 401, userInfo: [NSLocalizedDescriptionKey: "API Key Missing"])
@@ -39,7 +45,7 @@ public final class OpenRouterTranslationService: TranslationServiceProtocol {
         
         let prompt = """
         You are an expert translator for Chinese dialect learning.
-        Translate the following timestamped colloquial dialect segments line-by-line into standard Written Chinese (Mandarin).
+        Translate the following timestamped colloquial dialect segments line-by-line into \(target.promptName).
         Do not explain. Preserve the exact time frames. Maintain the exact line count. Return one JSON object:
         {
           "translations": [
@@ -56,7 +62,7 @@ public final class OpenRouterTranslationService: TranslationServiceProtocol {
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.setValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
-        request.setValue("Dialect Listener", forHTTPHeaderField: "X-Title")
+        request.setValue("Dialecter", forHTTPHeaderField: "X-Title")
         
         let body: [String: Any] = [
             "model": model,
@@ -156,7 +162,7 @@ public final class LocalRuleTranslationService: TranslationServiceProtocol {
     
     public init() {}
     
-    public func translate(_ segments: [SpeechSegment]) async throws -> [TranscriptLine] {
+    public func translate(_ segments: [SpeechSegment], target: TranslationTarget = .simplifiedChinese) async throws -> [TranscriptLine] {
         logger.info("Executing local dictionary translation rule set.")
         
         // Simulating minor computation delay
@@ -174,11 +180,21 @@ public final class LocalRuleTranslationService: TranslationServiceProtocol {
                 }
             }
             
+            let output: String
+            switch target {
+            case .simplifiedChinese:
+                output = translated
+            case .traditionalChinese:
+                output = translated.applyingTransform(StringTransform(rawValue: "Hans-Hant"), reverse: false) ?? translated
+            case .english:
+                output = segment.text
+            }
+
             return TranscriptLine(
                 startTimestamp: segment.start,
                 endTimestamp: segment.end,
                 dialectText: segment.text,
-                translationText: translated
+                translationText: output
             )
         }
     }
@@ -196,10 +212,10 @@ public final class SmartTranslationService: TranslationServiceProtocol {
         self.localService = LocalRuleTranslationService()
     }
     
-    public func translate(_ segments: [SpeechSegment]) async throws -> [TranscriptLine] {
+    public func translate(_ segments: [SpeechSegment], target: TranslationTarget = .simplifiedChinese) async throws -> [TranscriptLine] {
         // 1. Try OpenRouter first
         do {
-            let results = try await remoteService.translate(segments)
+            let results = try await remoteService.translate(segments, target: target)
             logger.info("SmartTranslation: Successfully completed via OpenRouter.")
             return results
         } catch {
@@ -208,6 +224,6 @@ public final class SmartTranslationService: TranslationServiceProtocol {
 
         // 2. Fallback to offline rule dictionary
         logger.info("SmartTranslation: Falling back to offline dictionary engine.")
-        return try await localService.translate(segments)
+        return try await localService.translate(segments, target: target)
     }
 }
