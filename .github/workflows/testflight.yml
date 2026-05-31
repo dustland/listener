@@ -52,8 +52,11 @@ jobs:
           ASC_KEY_ID: ${{ secrets.APP_STORE_CONNECT_API_KEY_ID }}
           ASC_PRIVATE_KEY: ${{ secrets.APP_STORE_CONNECT_API_PRIVATE_KEY }}
         run: |
+          mkdir -p "$HOME/.appstoreconnect/private_keys"
           mkdir -p "$RUNNER_TEMP/private_keys"
-          printf '%s' "$ASC_PRIVATE_KEY" > "$RUNNER_TEMP/private_keys/AuthKey_${ASC_KEY_ID}.p8"
+          printf '%s' "$ASC_PRIVATE_KEY" > "$HOME/.appstoreconnect/private_keys/AuthKey_${ASC_KEY_ID}.p8"
+          cp "$HOME/.appstoreconnect/private_keys/AuthKey_${ASC_KEY_ID}.p8" "$RUNNER_TEMP/private_keys/AuthKey_${ASC_KEY_ID}.p8"
+          chmod 600 "$HOME/.appstoreconnect/private_keys/AuthKey_${ASC_KEY_ID}.p8"
           chmod 600 "$RUNNER_TEMP/private_keys/AuthKey_${ASC_KEY_ID}.p8"
 
       - name: Install signing certificate and provisioning profile
