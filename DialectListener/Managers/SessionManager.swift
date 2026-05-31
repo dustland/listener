@@ -24,9 +24,13 @@ public final class SessionManager {
     public var recentSessions: [Session] = []
     public var isRecordingLocally: Bool = false
     public var isPermissionsGranted: Bool = false
+    public var liveTranscriptLines: [TranscriptLine] = []
+    public var liveTranslationStatus: String = "Waiting for speech..."
     
     // Simulated timer for periodic status updates back to the watch
     private var watchSyncTimer: Timer?
+    private var liveTranslationTask: Task<Void, Never>?
+    private var lastTranslatedSnapshot: String = ""
     
     public init(
         connectivityManager: WatchConnectivityManager? = nil,
@@ -73,8 +77,23 @@ public final class SessionManager {
         
         do {
             logger.info("Starting new session with ID: \(sessionId)")
-            
-            // 1. Start audio recording
+
+            liveTranscriptLines = []
+            liveTranslationStatus = "Listening..."
+            lastTranslatedSnapshot = ""
+
+            try asrService.startLiveTranscription { [weak self] result in
+                Task { @MainActor in
+                    self?.handleLiveTranscription(result)
+                }
+            }
+
+            let liveASRService = asrService
+            recorderManager.onAudioBuffer = { buffer in
+                liveASRService.appendAudioBuffer(buffer)
+            }
+
+            // 1. Start audio recording and stream buffers into live ASR
             let fileURL = try recorderManager.startRecording(sessionId: sessionId)
             
             // 2. Save Session object in SwiftData database
@@ -116,6 +135,9 @@ public final class SessionManager {
             
             // 1. Stop audio recorder
             let (_, duration) = try recorderManager.stopRecording()
+            recorderManager.onAudioBuffer = nil
+            asrService.stopLiveTranscription()
+            liveTranslationTask?.cancel()
             
             // 2. Stop watch sync loop
             stopWatchSyncLoop()
@@ -123,10 +145,12 @@ public final class SessionManager {
             // 3. Update database entity with final details
             session.endTime = Date()
             session.duration = duration
+            session.transcript = liveTranscriptLines
+            session.isProcessed = !liveTranscriptLines.isEmpty
             try modelContext?.save()
             
-            // 4. Transition UI and Connectivity to processing mode
-            connectivityManager.recordingState = .processing
+            // 4. Transition UI and Connectivity back to idle after live processing
+            connectivityManager.recordingState = .idle
             syncWatchState()
             
             self.isRecordingLocally = false
@@ -135,10 +159,7 @@ public final class SessionManager {
             // Reload list
             fetchRecentSessions()
             
-            // 5. Trigger ASR and translation processing
-            triggerAsyncProcessing(for: session)
-            
-            logger.info("Session \(session.id) recording stopped. Duration: \(duration)s. Triggered background transcription.")
+            logger.info("Session \(session.id) recording stopped. Duration: \(duration)s. Live transcript saved.")
         } catch {
             logger.error("Failed to stop session cleanly: \(error.localizedDescription)")
         }
@@ -232,6 +253,66 @@ public final class SessionManager {
             duration: duration,
             sessionId: connectivityManager.activeSessionId
         )
+    }
+
+    private func handleLiveTranscription(_ result: Result<LiveTranscriptionUpdate, Error>) {
+        switch result {
+        case .success(let update):
+            var existingTranslations: [String: String] = [:]
+            for line in liveTranscriptLines where !line.translationText.isEmpty {
+                existingTranslations[line.dialectText] = line.translationText
+            }
+            liveTranscriptLines = update.segments.map { segment in
+                TranscriptLine(
+                    startTimestamp: segment.start,
+                    endTimestamp: segment.end,
+                    dialectText: segment.text,
+                    translationText: existingTranslations[segment.text] ?? ""
+                )
+            }
+            scheduleLiveTranslation()
+        case .failure(let error):
+            liveTranslationStatus = "Speech recognition paused: \(error.localizedDescription)"
+        }
+    }
+
+    private func scheduleLiveTranslation() {
+        let snapshot = liveTranscriptLines
+            .map(\.dialectText)
+            .joined(separator: "\n")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+
+        guard !snapshot.isEmpty, snapshot != lastTranslatedSnapshot else { return }
+        liveTranslationStatus = "Translating..."
+        liveTranslationTask?.cancel()
+
+        liveTranslationTask = Task { [weak self] in
+            do {
+                try await Task.sleep(for: .milliseconds(1600))
+                guard let self else { return }
+
+                let lines = await MainActor.run { self.liveTranscriptLines }
+                let segments = lines.map {
+                    SpeechSegment(start: $0.startTimestamp, end: $0.endTimestamp, text: $0.dialectText)
+                }
+                let translatedLines = try await self.translationService.translate(segments)
+
+                await MainActor.run {
+                    self.liveTranscriptLines = translatedLines
+                    self.lastTranslatedSnapshot = snapshot
+                    self.liveTranslationStatus = "Live translation"
+                    self.activeSession?.transcript = translatedLines
+                    self.activeSession?.isProcessed = true
+                    try? self.modelContext?.save()
+                }
+            } catch is CancellationError {
+                return
+            } catch {
+                await MainActor.run {
+                    self?.liveTranslationStatus = "Using local translation fallback"
+                }
+            }
+        }
     }
     
     /// Triggers speech-to-text and translation pipeline in a background task

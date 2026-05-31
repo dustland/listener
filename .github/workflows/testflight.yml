@@ -31,6 +31,7 @@ jobs:
           IOS_CERTIFICATE_BASE64: ${{ secrets.IOS_DISTRIBUTION_CERTIFICATE_BASE64 }}
           IOS_CERTIFICATE_PASSWORD: ${{ secrets.IOS_DISTRIBUTION_CERTIFICATE_PASSWORD }}
           IOS_PROFILE_BASE64: ${{ secrets.IOS_APPSTORE_PROFILE_BASE64 }}
+          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
         run: |
           set -euo pipefail
           missing=()
@@ -41,6 +42,7 @@ jobs:
           [ -n "$IOS_CERTIFICATE_BASE64" ] || missing+=("IOS_DISTRIBUTION_CERTIFICATE_BASE64")
           [ -n "$IOS_CERTIFICATE_PASSWORD" ] || missing+=("IOS_DISTRIBUTION_CERTIFICATE_PASSWORD")
           [ -n "$IOS_PROFILE_BASE64" ] || missing+=("IOS_APPSTORE_PROFILE_BASE64")
+          [ -n "$OPENROUTER_API_KEY" ] || missing+=("OPENROUTER_API_KEY")
           if [ "${#missing[@]}" -gt 0 ]; then
             printf 'Missing required GitHub Actions secrets:\n'
             printf ' - %s\n' "${missing[@]}"
@@ -89,6 +91,7 @@ jobs:
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
           ASC_KEY_ID: ${{ secrets.APP_STORE_CONNECT_API_KEY_ID }}
           ASC_ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_API_ISSUER_ID }}
+          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
         run: |
           set -euo pipefail
           xcodebuild clean archive \
@@ -106,6 +109,7 @@ jobs:
             CODE_SIGN_STYLE=Manual \
             CODE_SIGN_IDENTITY="Apple Distribution" \
             PROVISIONING_PROFILE_SPECIFIER="Dialect Listener App Store" \
+            OPENROUTER_API_KEY="$OPENROUTER_API_KEY" \
             MARKETING_VERSION="$MARKETING_VERSION" \
             CURRENT_PROJECT_VERSION="$GITHUB_RUN_NUMBER"
 

@@ -1,4 +1,5 @@
 import Foundation
+import AVFoundation
 import Speech
 import OSLog
 
@@ -10,10 +11,19 @@ public struct SpeechSegment: Identifiable {
     public let text: String
 }
 
+/// Incremental speech recognition update emitted while recording is active.
+public struct LiveTranscriptionUpdate {
+    public let segments: [SpeechSegment]
+    public let isFinal: Bool
+}
+
 /// Interface for speech-to-text transcription service
 public protocol ASRServiceProtocol {
     func requestAuthorization() async -> Bool
     func transcribe(audioURL: URL) async throws -> [SpeechSegment]
+    func startLiveTranscription(onUpdate: @escaping (Result<LiveTranscriptionUpdate, Error>) -> Void) throws
+    func appendAudioBuffer(_ buffer: AVAudioPCMBuffer)
+    func stopLiveTranscription()
 }
 
 /// Concrete implementation of speech-to-text using Apple's native SFSpeechRecognizer.
@@ -22,6 +32,8 @@ public final class AppleASRService: ASRServiceProtocol {
     
     private let logger = Logger(subsystem: "com.dustland.DialectListener", category: "AppleASRService")
     private let locale = Locale(identifier: "zh-HK") // Default dialect profile for the first release
+    private var liveRecognitionRequest: SFSpeechAudioBufferRecognitionRequest?
+    private var liveRecognitionTask: SFSpeechRecognitionTask?
     
     public init() {}
     
@@ -93,6 +105,61 @@ public final class AppleASRService: ASRServiceProtocol {
                     continuation.resume(returning: segments)
                 }
             }
+        }
+    }
+
+    /// Starts a streaming recognizer. Audio buffers must be supplied through appendAudioBuffer(_:).
+    public func startLiveTranscription(onUpdate: @escaping (Result<LiveTranscriptionUpdate, Error>) -> Void) throws {
+        stopLiveTranscription()
+
+        guard let recognizer = SFSpeechRecognizer(locale: locale) else {
+            throw NSError(domain: "AppleASRService", code: 1, userInfo: [NSLocalizedDescriptionKey: "Speech recognizer is not supported for the selected dialect on this device."])
+        }
+
+        guard recognizer.isAvailable else {
+            throw NSError(domain: "AppleASRService", code: 2, userInfo: [NSLocalizedDescriptionKey: "Speech Recognition Service is unavailable."])
+        }
+
+        let request = SFSpeechAudioBufferRecognitionRequest()
+        request.shouldReportPartialResults = true
+        if recognizer.supportsOnDeviceRecognition {
+            request.requiresOnDeviceRecognition = true
+        }
+
+        liveRecognitionRequest = request
+        liveRecognitionTask = recognizer.recognitionTask(with: request) { [weak self] result, error in
+            if let error = error {
+                self?.logger.error("Live speech recognition failed: \(error.localizedDescription)")
+                onUpdate(.failure(error))
+                return
+            }
+
+            guard let result = result else { return }
+            let segments = Self.makeSegments(from: result.bestTranscription)
+            onUpdate(.success(LiveTranscriptionUpdate(segments: segments, isFinal: result.isFinal)))
+        }
+    }
+
+    public func appendAudioBuffer(_ buffer: AVAudioPCMBuffer) {
+        liveRecognitionRequest?.append(buffer)
+    }
+
+    public func stopLiveTranscription() {
+        liveRecognitionRequest?.endAudio()
+        liveRecognitionTask?.cancel()
+        liveRecognitionRequest = nil
+        liveRecognitionTask = nil
+    }
+
+    private static func makeSegments(from transcription: SFTranscription) -> [SpeechSegment] {
+        transcription.segments.compactMap { segment in
+            let text = segment.substring.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !text.isEmpty else { return nil }
+            return SpeechSegment(
+                start: segment.timestamp,
+                end: segment.timestamp + segment.duration,
+                text: text
+            )
         }
     }
 }

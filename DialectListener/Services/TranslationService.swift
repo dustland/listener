@@ -6,22 +6,30 @@ public protocol TranslationServiceProtocol {
     func translate(_ segments: [SpeechSegment]) async throws -> [TranscriptLine]
 }
 
-/// A premium translation service using Google's Gemini API to produce high-fidelity written Chinese.
+/// A premium translation service using OpenRouter to produce high-fidelity written Chinese.
 /// Understands slang, particles, English code-switching, and cultural context.
-public final class GeminiTranslationService: TranslationServiceProtocol {
+public final class OpenRouterTranslationService: TranslationServiceProtocol {
     
-    private let logger = Logger(subsystem: "com.dustland.DialectListener", category: "GeminiTranslationService")
+    private let logger = Logger(subsystem: "com.dustland.DialectListener", category: "OpenRouterTranslationService")
     private let apiKey: String?
+    private let model: String
     
-    public init(apiKey: String? = nil) {
-        // Reads from Info.plist or secure storage if present
-        self.apiKey = apiKey ?? ProcessInfo.processInfo.environment["GEMINI_API_KEY"]
+    public init(apiKey: String? = nil, model: String = "openai/gpt-4o-mini") {
+        let configuredKey = apiKey
+            ?? Bundle.main.object(forInfoDictionaryKey: "OpenRouterAPIKey") as? String
+            ?? ProcessInfo.processInfo.environment["OPENROUTER_API_KEY"]
+        if let configuredKey, !configuredKey.isEmpty, !configuredKey.hasPrefix("$(") {
+            self.apiKey = configuredKey
+        } else {
+            self.apiKey = nil
+        }
+        self.model = model
     }
     
     public func translate(_ segments: [SpeechSegment]) async throws -> [TranscriptLine] {
         guard let apiKey = apiKey, !apiKey.isEmpty else {
-            logger.warning("Gemini API Key missing. Falling back to local translation engine.")
-            throw NSError(domain: "GeminiTranslationService", code: 401, userInfo: [NSLocalizedDescriptionKey: "API Key Missing"])
+            logger.warning("OpenRouter API Key missing. Falling back to local translation engine.")
+            throw NSError(domain: "OpenRouterTranslationService", code: 401, userInfo: [NSLocalizedDescriptionKey: "API Key Missing"])
         }
         
         guard !segments.isEmpty else { return [] }
@@ -32,27 +40,30 @@ public final class GeminiTranslationService: TranslationServiceProtocol {
         let prompt = """
         You are an expert translator for Chinese dialect learning.
         Translate the following timestamped colloquial dialect segments line-by-line into standard Written Chinese (Mandarin).
-        Do not explain. Preserve the exact time frames. Maintain the exact line count. Keep formatting as JSON:
-        [
-          {"start": 1.2, "end": 4.5, "dialect": "佢今日好似冇返工啵。", "translation": "他今天好像没上班。"}
-        ]
+        Do not explain. Preserve the exact time frames. Maintain the exact line count. Return one JSON object:
+        {
+          "translations": [
+            {"start": 1.2, "end": 4.5, "dialect": "佢今日好似冇返工啵。", "translation": "他今天好像没上班。"}
+          ]
+        }
         
         Segments to translate:
         \(inputLines)
         """
         
-        let url = URL(string: "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=\(apiKey)")!
+        let url = URL(string: "https://openrouter.ai/api/v1/chat/completions")!
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.setValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
+        request.setValue("Dialect Listener", forHTTPHeaderField: "X-Title")
         
         let body: [String: Any] = [
-            "contents": [
-                ["parts": [["text": prompt]]]
+            "model": model,
+            "messages": [
+                ["role": "user", "content": prompt]
             ],
-            "generationConfig": [
-                "responseMimeType": "application/json"
-            ]
+            "response_format": ["type": "json_object"]
         ]
         
         request.httpBody = try JSONSerialization.data(withJSONObject: body)
@@ -60,26 +71,22 @@ public final class GeminiTranslationService: TranslationServiceProtocol {
         let (data, response) = try await URLSession.shared.data(for: request)
         
         guard let httpResponse = response as? HTTPURLResponse, httpResponse.statusCode == 200 else {
-            throw NSError(domain: "GeminiTranslationService", code: 500, userInfo: [NSLocalizedDescriptionKey: "Invalid API response from Gemini server."])
+            throw NSError(domain: "OpenRouterTranslationService", code: 500, userInfo: [NSLocalizedDescriptionKey: "Invalid API response from OpenRouter server."])
         }
         
-        // Parse Gemini JSON response
-        struct GeminiResponse: Codable {
-            struct Candidate: Codable {
-                struct Content: Codable {
-                    struct Part: Codable {
-                        let text: String
-                    }
-                    let parts: [Part]
+        struct OpenRouterResponse: Codable {
+            struct Choice: Codable {
+                struct Message: Codable {
+                    let content: String
                 }
-                let content: Content
+                let message: Message
             }
-            let candidates: [Candidate]
+            let choices: [Choice]
         }
         
-        let decoded = try JSONDecoder().decode(GeminiResponse.self, from: data)
-        guard let jsonString = decoded.candidates.first?.content.parts.first?.text else {
-            throw NSError(domain: "GeminiTranslationService", code: 500, userInfo: [NSLocalizedDescriptionKey: "Failed to extract text from Gemini response."])
+        let decoded = try JSONDecoder().decode(OpenRouterResponse.self, from: data)
+        guard let jsonString = decoded.choices.first?.message.content else {
+            throw NSError(domain: "OpenRouterTranslationService", code: 500, userInfo: [NSLocalizedDescriptionKey: "Failed to extract text from OpenRouter response."])
         }
         
         struct TranslatedItem: Codable {
@@ -90,7 +97,15 @@ public final class GeminiTranslationService: TranslationServiceProtocol {
         }
         
         let jsonBytes = Data(jsonString.utf8)
-        let items = try JSONDecoder().decode([TranslatedItem].self, from: jsonBytes)
+        let items: [TranslatedItem]
+        if let array = try? JSONDecoder().decode([TranslatedItem].self, from: jsonBytes) {
+            items = array
+        } else {
+            struct WrappedResponse: Codable {
+                let translations: [TranslatedItem]
+            }
+            items = try JSONDecoder().decode(WrappedResponse.self, from: jsonBytes).translations
+        }
         
         return items.map { item in
             TranscriptLine(
@@ -169,26 +184,26 @@ public final class LocalRuleTranslationService: TranslationServiceProtocol {
     }
 }
 
-/// Composite service which attempts Gemini if configured and falls back to LocalRule translation.
+/// Composite service which attempts OpenRouter if configured and falls back to LocalRule translation.
 public final class SmartTranslationService: TranslationServiceProtocol {
     
     private let logger = Logger(subsystem: "com.dustland.DialectListener", category: "SmartTranslationService")
-    private let geminiService: GeminiTranslationService
+    private let remoteService: OpenRouterTranslationService
     private let localService: LocalRuleTranslationService
     
-    public init(geminiApiKey: String? = nil) {
-        self.geminiService = GeminiTranslationService(apiKey: geminiApiKey)
+    public init(openRouterApiKey: String? = nil) {
+        self.remoteService = OpenRouterTranslationService(apiKey: openRouterApiKey)
         self.localService = LocalRuleTranslationService()
     }
     
     public func translate(_ segments: [SpeechSegment]) async throws -> [TranscriptLine] {
-        // 1. Try Gemini first
+        // 1. Try OpenRouter first
         do {
-            let results = try await geminiService.translate(segments)
-            logger.info("SmartTranslation: Successfully completed via Gemini.")
+            let results = try await remoteService.translate(segments)
+            logger.info("SmartTranslation: Successfully completed via OpenRouter.")
             return results
         } catch {
-            logger.warning("SmartTranslation: Gemini Translation skipped or failed (\(error.localizedDescription)). Falling back to local rules...")
+            logger.warning("SmartTranslation: OpenRouter Translation skipped or failed (\(error.localizedDescription)). Falling back to local rules...")
         }
 
         // 2. Fallback to offline rule dictionary

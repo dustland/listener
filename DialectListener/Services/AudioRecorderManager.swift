@@ -23,7 +23,7 @@ public enum AudioRecordingError: Error, LocalizedError {
     }
 }
 
-/// Manages native iPhone audio recording using AVAudioRecorder.
+/// Manages native iPhone audio recording using AVAudioEngine.
 /// Optimized for speech ASR quality (16kHz, mono, AAC format) and handles background sessions.
 @Observable
 public final class AudioRecorderManager {
@@ -33,8 +33,10 @@ public final class AudioRecorderManager {
     public var isRecording: Bool = false
     public var currentDuration: TimeInterval = 0.0
     public var activeAudioURL: URL? = nil
+    public var onAudioBuffer: ((AVAudioPCMBuffer) -> Void)?
     
-    private var audioRecorder: AVAudioRecorder?
+    private var audioEngine: AVAudioEngine?
+    private var audioFile: AVAudioFile?
     private var timer: Timer?
     private var startTime: Date?
     
@@ -78,35 +80,38 @@ public final class AudioRecorderManager {
         // Ensure folder exists
         try? FileManager.default.createDirectory(at: audioFolderURL, withIntermediateDirectories: true, attributes: nil)
         
-        let fileURL = audioFolderURL.appendingPathComponent("\(sessionId.uuidString).m4a")
-        
-        // Optimized settings for speech ASR
-        let settings: [String: Any] = [
-            AVFormatIDKey: Int(kAudioFormatMPEG4AAC),
-            AVSampleRateKey: 16000.0, // 16kHz is ideal for ASR
-            AVNumberOfChannelsKey: 1,  // Mono is lighter and optimal for single audio source ASR
-            AVEncoderAudioQualityKey: AVAudioQuality.high.rawValue
-        ]
+        let fileURL = audioFolderURL.appendingPathComponent("\(sessionId.uuidString).caf")
         
         do {
-            let recorder = try AVAudioRecorder(url: fileURL, settings: settings)
-            recorder.prepareToRecord()
-            
-            if recorder.record() {
-                self.audioRecorder = recorder
-                self.isRecording = true
-                self.activeAudioURL = fileURL
-                self.startTime = Date()
-                self.currentDuration = 0.0
-                
-                // Start a simple UI timer to keep track of length locally
-                startTimer()
-                
-                logger.info("Successfully started audio recording at URL: \(fileURL)")
-                return fileURL
-            } else {
-                throw AudioRecordingError.failedToStartRecorder("AVAudioRecorder record() call returned false")
+            let engine = AVAudioEngine()
+            let inputNode = engine.inputNode
+            let format = inputNode.outputFormat(forBus: 0)
+            let file = try AVAudioFile(forWriting: fileURL, settings: format.settings)
+
+            inputNode.installTap(onBus: 0, bufferSize: 1024, format: format) { [weak self] buffer, _ in
+                guard let self else { return }
+                do {
+                    try self.audioFile?.write(from: buffer)
+                } catch {
+                    self.logger.error("Failed to write live audio buffer: \(error.localizedDescription)")
+                }
+                self.onAudioBuffer?(buffer)
             }
+
+            engine.prepare()
+            try engine.start()
+
+            self.audioEngine = engine
+            self.audioFile = file
+            self.isRecording = true
+            self.activeAudioURL = fileURL
+            self.startTime = Date()
+            self.currentDuration = 0.0
+
+            startTimer()
+
+            logger.info("Successfully started live audio capture at URL: \(fileURL)")
+            return fileURL
         } catch {
             logger.error("Failed to setup audio recorder: \(error.localizedDescription)")
             throw AudioRecordingError.failedToStartRecorder(error.localizedDescription)
@@ -115,21 +120,23 @@ public final class AudioRecorderManager {
     
     /// Stops the active recording session, cleans up the AVAudioSession, and returns the file URL and final duration.
     public func stopRecording() throws -> (URL, TimeInterval) {
-        guard isRecording, let recorder = audioRecorder, let audioURL = activeAudioURL else {
+        guard isRecording, let engine = audioEngine, let audioURL = activeAudioURL else {
             logger.warning("Attempted to stop recording when not recording.")
             throw AudioRecordingError.notRecording
         }
         
         stopTimer()
-        recorder.stop()
-        
-        let duration = recorder.currentTime
+        engine.inputNode.removeTap(onBus: 0)
+        engine.stop()
+
+        let duration = currentDuration
         
         // Deactivate audio session to release microphone
         let audioSession = AVAudioSession.sharedInstance()
         try? audioSession.setActive(false, options: .notifyOthersOnDeactivation)
         
-        self.audioRecorder = nil
+        self.audioEngine = nil
+        self.audioFile = nil
         self.isRecording = false
         self.activeAudioURL = nil
         self.currentDuration = 0.0
