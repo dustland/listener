@@ -30,6 +30,7 @@ public enum WatchConnectivityProtocol {
     
     /// Status payloads sent from iPhone back to Apple Watch
     public enum HostState {
+        public static let statusUpdate = "STATUS_UPDATE"
         public static let idle = "IDLE"
         public static let recording = "RECORDING"
         public static let processing = "PROCESSING"

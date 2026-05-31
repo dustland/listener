@@ -29,15 +29,15 @@ public final class SessionManager {
     private var watchSyncTimer: Timer?
     
     public init(
-        connectivityManager: WatchConnectivityManager = WatchConnectivityManager(),
-        recorderManager: AudioRecorderManager = AudioRecorderManager(),
-        asrService: ASRServiceProtocol = AppleASRService(),
-        translationService: TranslationServiceProtocol = SmartTranslationService()
+        connectivityManager: WatchConnectivityManager? = nil,
+        recorderManager: AudioRecorderManager? = nil,
+        asrService: ASRServiceProtocol? = nil,
+        translationService: TranslationServiceProtocol? = nil
     ) {
-        self.connectivityManager = connectivityManager
-        self.recorderManager = recorderManager
-        self.asrService = asrService
-        self.translationService = translationService
+        self.connectivityManager = connectivityManager ?? WatchConnectivityManager()
+        self.recorderManager = recorderManager ?? AudioRecorderManager()
+        self.asrService = asrService ?? AppleASRService()
+        self.translationService = translationService ?? SmartTranslationService()
         
         setupConnectivityCallbacks()
         checkPermissions()
@@ -236,14 +236,14 @@ public final class SessionManager {
     
     /// Triggers speech-to-text and translation pipeline in a background task
     private func triggerAsyncProcessing(for session: Session) {
-        Task.detached(priority: .background) {
+        Task(priority: .background) {
             let logger = Logger(subsystem: "com.dustland.DialectListener", category: "BackgroundASRTask")
             
             // Get full audio path on device
             let documentDirectory = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
             let audioURL = documentDirectory.appendingPathComponent("Sessions").appendingPathComponent(session.audioFilePath)
             
-            var lines: [TranscriptLine] = []
+            let lines: [TranscriptLine]
             
             do {
                 // Step 1: Run native dialect ASR
@@ -269,9 +269,10 @@ public final class SessionManager {
             // Step 3: Update SwiftData models on the main actor
             await MainActor.run { [weak self] in
                 guard let self = self else { return }
+                let sessionId = session.id
                 
                 // Fetch fresh session reference in main context
-                let fetchDescriptor = FetchDescriptor<Session>(predicate: #Predicate { $0.id == session.id })
+                let fetchDescriptor = FetchDescriptor<Session>(predicate: #Predicate { $0.id == sessionId })
                 if let freshSession = try? self.modelContext?.fetch(fetchDescriptor).first {
                     
                     freshSession.transcript = lines

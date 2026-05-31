@@ -1,8 +1,5 @@
 import Foundation
 import OSLog
-#if canImport(Translation)
-import Translation
-#endif
 
 /// Pluggable translation service to convert colloquial dialect text to written Mandarin Chinese.
 public protocol TranslationServiceProtocol {
@@ -172,7 +169,7 @@ public final class LocalRuleTranslationService: TranslationServiceProtocol {
     }
 }
 
-/// Composite service which attempts Gemini if configured, iOS 18 Translation API if on compatible systems, and falls back to LocalRule translation.
+/// Composite service which attempts Gemini if configured and falls back to LocalRule translation.
 public final class SmartTranslationService: TranslationServiceProtocol {
     
     private let logger = Logger(subsystem: "com.dustland.DialectListener", category: "SmartTranslationService")
@@ -191,39 +188,10 @@ public final class SmartTranslationService: TranslationServiceProtocol {
             logger.info("SmartTranslation: Successfully completed via Gemini.")
             return results
         } catch {
-            logger.warning("SmartTranslation: Gemini Translation skipped or failed (\(error.localizedDescription)). Trying iOS Translation API...")
+            logger.warning("SmartTranslation: Gemini Translation skipped or failed (\(error.localizedDescription)). Falling back to local rules...")
         }
-        
-        // 2. Try iOS 18 native Translation Framework if available
-        #if canImport(Translation)
-        if #available(iOS 18.0, macOS 15.0, *) {
-            do {
-                logger.info("SmartTranslation: Attempting iOS 18 Native Translation API.")
-                var lines: [TranscriptLine] = []
-                
-                // Set up local Translation configurations
-                let config = Translator.Configuration(sourceLanguage: .init(identifier: "zh-HK"), targetLanguage: .init(identifier: "zh-CN"))
-                let translator = try await Translator(configuration: config)
-                
-                for segment in segments {
-                    let response = try await translator.translate(segment.text)
-                    lines.append(TranscriptLine(
-                        startTimestamp: segment.start,
-                        endTimestamp: segment.end,
-                        dialectText: segment.text,
-                        translationText: response.targetText
-                    ))
-                }
-                
-                logger.info("SmartTranslation: Successfully completed via iOS 18 Translation API.")
-                return lines
-            } catch {
-                logger.error("SmartTranslation: iOS 18 Translation API failed: \(error.localizedDescription)")
-            }
-        }
-        #endif
-        
-        // 3. Fallback to offline rule dictionary
+
+        // 2. Fallback to offline rule dictionary
         logger.info("SmartTranslation: Falling back to offline dictionary engine.")
         return try await localService.translate(segments)
     }
