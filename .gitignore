@@ -22,6 +22,7 @@ AuthKey_*.p8
 # Local environment
 .env
 .env.*
+.superpowers/
 
 # macOS
 .DS_Store
