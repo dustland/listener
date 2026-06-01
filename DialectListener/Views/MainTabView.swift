@@ -83,17 +83,11 @@ private struct AgentView: View {
     private var header: some View {
         HStack(spacing: 10) {
             ZStack {
-                RoundedRectangle(cornerRadius: 10)
-                    .fill(Color.white.opacity(0.06))
+                Image("AppIcon")
+                    .resizable()
+                    .scaledToFill()
                     .frame(width: 34, height: 34)
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 10)
-                            .stroke(Color.white.opacity(0.08), lineWidth: 1)
-                    )
-
-                Text("粤")
-                    .font(.system(size: 15, weight: .black, design: .rounded))
-                    .foregroundColor(.mint)
+                    .clipShape(RoundedRectangle(cornerRadius: 10))
             }
 
             Text("\(settings.chatTargetDialect.title) ↔ \(AppText.t("Mandarin", "普通话"))")
