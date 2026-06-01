@@ -37,9 +37,9 @@ The main screen has three areas:
    - Avoids model names, provider names, mode names, and technical status.
 
 2. Message area
-   - Shows the conversation as a vertical message list.
-   - User messages align right.
-   - Agent and ambient messages align left.
+   - Shows a single vertical event stream rather than a two-sided chat transcript.
+   - All message blocks align to the same reading column.
+   - User, agent, and ambient entries are distinguished by small labels, icons, tone, and content structure rather than left/right alignment.
    - Ambient messages include a small source label, such as 环境倾听.
    - Empty state appears only when there are no messages.
 
@@ -98,13 +98,14 @@ The composer has five states:
 
 User message:
 
-- Right aligned.
+- Aligns to the shared reading column.
 - Uses the accent fill color.
+- Includes a small “我” or input icon label only when needed for clarity.
 - Contains only the user text.
 
 Agent reply:
 
-- Left aligned.
+- Aligns to the shared reading column.
 - Contains Cantonese text as the primary line.
 - Contains pronunciation as a secondary line when available.
 - Contains a short note only when it adds value.
@@ -113,7 +114,7 @@ Agent reply:
 
 Ambient message:
 
-- Left aligned.
+- Aligns to the shared reading column.
 - Contains a small “环境倾听” label.
 - Contains source speech as primary text.
 - Contains translation as secondary text.
