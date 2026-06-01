@@ -30,8 +30,9 @@ This keeps the mental model simple: everything useful appears in one chronologic
 The main screen has three areas:
 
 1. Header
-   - Shows 方言家 as the product identity.
-   - Shows a compact language pair label, such as 粤语 ↔ 普通话.
+   - Uses the 方言家 logo mark as the product identity.
+   - Combines identity and language direction into one compact row.
+   - Shows only a compact language pair label, such as 粤语 ↔ 普通话, beside the logo.
    - Provides a small settings button.
    - Avoids model names, provider names, mode names, and technical status.
 
