@@ -7,6 +7,7 @@ public struct ChatView: View {
     @State private var result: DialectChatResult?
     @State private var isTranslating = false
     @State private var isPressingVoice = false
+    @FocusState private var isInputFocused: Bool
     @State private var statusText: String?
     @State private var dictationManager = MandarinDictationManager()
     @State private var speechSynthesizer = AVSpeechSynthesizer()
@@ -52,6 +53,7 @@ public struct ChatView: View {
         }
         .onDisappear {
             dictationManager.stop()
+            isInputFocused = false
             speechSynthesizer.stopSpeaking(at: .immediate)
         }
     }
@@ -90,29 +92,7 @@ public struct ChatView: View {
     private var inputPanel: some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack(alignment: .bottom, spacing: 10) {
-                TextEditor(text: $inputText)
-                    .font(.system(.body, design: .rounded))
-                    .foregroundColor(.white)
-                    .scrollContentBackground(.hidden)
-                    .frame(minHeight: 42, maxHeight: 104)
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, 8)
-                    .background(Color.white.opacity(0.05))
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 18)
-                            .stroke(isPressingVoice ? Color.cyan.opacity(0.6) : Color.white.opacity(0.08), lineWidth: 1)
-                    )
-                    .cornerRadius(18)
-                    .overlay(alignment: .topLeading) {
-                        if inputText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                            Text(isPressingVoice ? AppText.t("Release to send", "松开发送") : AppText.t("Type, or hold the mic to speak.", "输入文字，或按住麦克风说话。"))
-                                .font(.system(.body, design: .rounded))
-                                .foregroundColor(.secondary)
-                                .padding(.horizontal, 16)
-                                .padding(.vertical, 16)
-                                .allowsHitTesting(false)
-                        }
-                    }
+                inputField
 
                 inputActionButton
             }
@@ -122,6 +102,53 @@ public struct ChatView: View {
                     .font(.system(.caption, design: .rounded))
                     .foregroundColor(.secondary)
             }
+        }
+    }
+
+    @ViewBuilder
+    private var inputField: some View {
+        if isInputFocused || !inputText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            TextEditor(text: $inputText)
+                .focused($isInputFocused)
+                .font(.system(.body, design: .rounded))
+                .foregroundColor(.white)
+                .scrollContentBackground(.hidden)
+                .frame(minHeight: 42, maxHeight: 104)
+                .padding(.horizontal, 10)
+                .padding(.vertical, 8)
+                .background(Color.white.opacity(0.05))
+                .overlay(
+                    RoundedRectangle(cornerRadius: 18)
+                        .stroke(isPressingVoice ? Color.cyan.opacity(0.6) : Color.white.opacity(0.08), lineWidth: 1)
+                )
+                .cornerRadius(18)
+                .overlay(alignment: .topLeading) {
+                    if inputText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                        Text(isPressingVoice ? AppText.t("Release to send", "松开发送") : AppText.t("Type Mandarin", "输入普通话"))
+                            .font(.system(.body, design: .rounded))
+                            .foregroundColor(.secondary)
+                            .padding(.horizontal, 16)
+                            .padding(.vertical, 16)
+                            .allowsHitTesting(false)
+                    }
+                }
+        } else {
+            Button {
+                isInputFocused = true
+            } label: {
+                Text(AppText.t("Message", "输入"))
+                    .font(.system(.body, design: .rounded))
+                    .foregroundColor(.secondary)
+                    .frame(maxWidth: .infinity, minHeight: 42, alignment: .leading)
+                    .padding(.horizontal, 14)
+                    .background(Color.white.opacity(0.05))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 18)
+                            .stroke(Color.white.opacity(0.08), lineWidth: 1)
+                    )
+                    .cornerRadius(18)
+            }
+            .buttonStyle(.plain)
         }
     }
 
@@ -171,7 +198,7 @@ public struct ChatView: View {
 
                 playButton
             } else {
-                Text(AppText.t("Send a Mandarin phrase to get a dialect version and pronunciation.", "发送一句普通话，获取方言说法和发音。"))
+                Text(AppText.t("No messages", "暂无消息"))
                     .font(.system(.body, design: .rounded))
                     .foregroundColor(.secondary)
                     .frame(maxWidth: .infinity, minHeight: 260, alignment: .center)
@@ -232,6 +259,7 @@ public struct ChatView: View {
 
     private func beginVoiceMessage() {
         guard !isPressingVoice, !dictationManager.isRecording else { return }
+        isInputFocused = false
         isPressingVoice = true
         inputText = ""
         statusText = AppText.t("Listening for Mandarin...", "正在听普通话...")
@@ -277,6 +305,7 @@ public struct ChatView: View {
 
     private func translate() {
         dictationManager.stop()
+        isInputFocused = false
         statusText = nil
         isTranslating = true
 

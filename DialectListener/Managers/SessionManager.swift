@@ -33,6 +33,7 @@ public final class SessionManager {
     private var watchSyncTimer: Timer?
     private var liveTranslationTask: Task<Void, Never>?
     private var lastTranslatedSnapshot: String = ""
+    private var liveASRSegments: [SpeechSegment] = []
     
     public init(
         connectivityManager: WatchConnectivityManager? = nil,
@@ -86,6 +87,7 @@ public final class SessionManager {
             liveTranscriptLines = []
             liveTranslationStatus = AppText.t("Listening...", "倾听中...")
             lastTranslatedSnapshot = ""
+            liveASRSegments = []
 
             translationService = SmartTranslationService(model: appSettings.aiModel.modelIdentifier)
             asrService.setLocaleIdentifier(appSettings.sourceLanguage.localeIdentifier)
@@ -271,9 +273,10 @@ public final class SessionManager {
     private func handleLiveTranscription(_ result: Result<LiveTranscriptionUpdate, Error>) {
         switch result {
         case .success(let update):
-            liveTranscriptLines = mergedTranscriptLines(
-                existing: liveTranscriptLines,
-                incomingSegments: update.segments
+            liveASRSegments = mergedSpeechSegments(existing: liveASRSegments, incoming: update.segments)
+            liveTranscriptLines = mergeExistingTranslations(
+                oldLines: liveTranscriptLines,
+                newLines: sentenceLines(from: liveASRSegments)
             )
             scheduleLiveTranslation()
         case .failure(let error):
@@ -281,66 +284,117 @@ public final class SessionManager {
         }
     }
 
-    private func mergedTranscriptLines(existing: [TranscriptLine], incomingSegments: [SpeechSegment]) -> [TranscriptLine] {
+    private func mergedSpeechSegments(existing: [SpeechSegment], incoming: [SpeechSegment]) -> [SpeechSegment] {
         var merged = existing
 
-        for segment in incomingSegments {
+        for segment in incoming {
             let text = segment.text.trimmingCharacters(in: .whitespacesAndNewlines)
             guard !text.isEmpty else { continue }
 
-            if let index = merged.firstIndex(where: { isSameLiveSegment($0, segment) }) {
-                let oldLine = merged[index]
-                merged[index] = TranscriptLine(
-                    id: oldLine.id,
-                    startTimestamp: segment.start,
-                    endTimestamp: segment.end,
-                    dialectText: text,
-                    translationText: oldLine.dialectText == text ? oldLine.translationText : ""
+            if let index = merged.firstIndex(where: { isSameSpeechSegment($0, segment) }) {
+                merged[index] = SpeechSegment(
+                    start: segment.start,
+                    end: segment.end,
+                    text: text
                 )
             } else {
-                merged.append(
-                    TranscriptLine(
-                        startTimestamp: segment.start,
-                        endTimestamp: segment.end,
-                        dialectText: text,
-                        translationText: ""
-                    )
-                )
+                merged.append(SpeechSegment(start: segment.start, end: segment.end, text: text))
             }
         }
 
-        return deduplicatedTranscriptLines(merged.sorted { $0.startTimestamp < $1.startTimestamp })
+        return deduplicatedSpeechSegments(merged.sorted { $0.start < $1.start })
     }
 
-    private func isSameLiveSegment(_ line: TranscriptLine, _ segment: SpeechSegment) -> Bool {
-        let closeStart = abs(line.startTimestamp - segment.start) < 0.45
-        let closeEnd = abs(line.endTimestamp - segment.end) < 0.8
-        let sameText = line.dialectText == segment.text.trimmingCharacters(in: .whitespacesAndNewlines)
+    private func isSameSpeechSegment(_ lhs: SpeechSegment, _ rhs: SpeechSegment) -> Bool {
+        let closeStart = abs(lhs.start - rhs.start) < 0.45
+        let closeEnd = abs(lhs.end - rhs.end) < 0.8
+        let sameText = lhs.text == rhs.text.trimmingCharacters(in: .whitespacesAndNewlines)
         return (closeStart && closeEnd) || (sameText && closeStart)
     }
 
-    private func deduplicatedTranscriptLines(_ lines: [TranscriptLine]) -> [TranscriptLine] {
-        var output: [TranscriptLine] = []
-        for line in lines {
+    private func deduplicatedSpeechSegments(_ segments: [SpeechSegment]) -> [SpeechSegment] {
+        var output: [SpeechSegment] = []
+        for segment in segments {
             if let last = output.last,
-               last.dialectText == line.dialectText,
-               abs(last.startTimestamp - line.startTimestamp) < 0.6 {
-                if line.endTimestamp >= last.endTimestamp {
-                    output[output.count - 1] = line.translationText.isEmpty && !last.translationText.isEmpty
-                        ? TranscriptLine(
-                            id: last.id,
-                            startTimestamp: line.startTimestamp,
-                            endTimestamp: line.endTimestamp,
-                            dialectText: line.dialectText,
-                            translationText: last.translationText
-                        )
-                        : line
+               normalizedTranscriptText(last.text) == normalizedTranscriptText(segment.text),
+               abs(last.start - segment.start) < 0.6 {
+                if segment.end >= last.end {
+                    output[output.count - 1] = segment
                 }
             } else {
-                output.append(line)
+                output.append(segment)
             }
         }
         return output
+    }
+
+    private func sentenceLines(from segments: [SpeechSegment]) -> [TranscriptLine] {
+        var lines: [TranscriptLine] = []
+        var current: [SpeechSegment] = []
+
+        for segment in segments.sorted(by: { $0.start < $1.start }) {
+            if let previous = current.last {
+                let pause = segment.start - previous.end
+                let textLength = current.map(\.text).joined().count
+                if pause > 0.75 || textLength >= 22 || endsLikeSentence(previous.text) {
+                    appendSentenceLine(from: current, to: &lines)
+                    current = []
+                }
+            }
+            current.append(segment)
+        }
+
+        appendSentenceLine(from: current, to: &lines)
+        return lines
+    }
+
+    private func appendSentenceLine(from segments: [SpeechSegment], to lines: inout [TranscriptLine]) {
+        guard let first = segments.first, let last = segments.last else { return }
+        let text = joinedSpeechText(segments.map(\.text))
+        guard !text.isEmpty else { return }
+
+        lines.append(
+            TranscriptLine(
+                startTimestamp: first.start,
+                endTimestamp: last.end,
+                dialectText: text,
+                translationText: ""
+            )
+        )
+    }
+
+    private func joinedSpeechText(_ pieces: [String]) -> String {
+        let cleaned = pieces
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
+
+        guard !cleaned.isEmpty else { return "" }
+        let containsLatin = cleaned.contains { piece in
+            piece.range(of: #"[A-Za-z]"#, options: .regularExpression) != nil
+        }
+        return cleaned.joined(separator: containsLatin ? " " : "")
+    }
+
+    private func endsLikeSentence(_ text: String) -> Bool {
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard let last = trimmed.last else { return false }
+        return "。！？?!，,；;".contains(last)
+    }
+
+    private func mergeExistingTranslations(oldLines: [TranscriptLine], newLines: [TranscriptLine]) -> [TranscriptLine] {
+        newLines.map { line in
+            guard let oldLine = oldLines.first(where: { isSameTranscriptLine($0, line) }) else {
+                return line
+            }
+
+            return TranscriptLine(
+                id: oldLine.id,
+                startTimestamp: line.startTimestamp,
+                endTimestamp: line.endTimestamp,
+                dialectText: line.dialectText,
+                translationText: oldLine.translationText
+            )
+        }
     }
 
     private func scheduleLiveTranslation() {
@@ -392,12 +446,16 @@ public final class SessionManager {
                 return line
             }
 
+            let translationText = normalizedTranscriptText(translatedLine.translationText) == normalizedTranscriptText(line.dialectText)
+                ? ""
+                : translatedLine.translationText
+
             return TranscriptLine(
                 id: line.id,
                 startTimestamp: line.startTimestamp,
                 endTimestamp: line.endTimestamp,
                 dialectText: line.dialectText,
-                translationText: translatedLine.translationText
+                translationText: translationText
             )
         }
     }

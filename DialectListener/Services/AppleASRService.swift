@@ -9,6 +9,12 @@ public struct SpeechSegment: Identifiable {
     public let start: TimeInterval
     public let end: TimeInterval
     public let text: String
+
+    public init(start: TimeInterval, end: TimeInterval, text: String) {
+        self.start = start
+        self.end = end
+        self.text = text
+    }
 }
 
 /// Incremental speech recognition update emitted while recording is active.

@@ -45,13 +45,19 @@ public final class OpenRouterTranslationService: TranslationServiceProtocol {
         
         let prompt = """
         You are an expert translator for Chinese dialect learning.
-        Translate the following timestamped colloquial dialect segments line-by-line into \(target.promptName).
+        Translate the following timestamped sentence-level colloquial dialect lines into \(target.promptName).
         Do not explain. Preserve the exact time frames. Maintain the exact line count. Return one JSON object:
         {
           "translations": [
             {"start": 1.2, "end": 4.5, "dialect": "佢今日好似冇返工啵。", "translation": "他今天好像没上班。"}
           ]
         }
+
+        Rules:
+        - Each input line is already grouped as one spoken sentence or utterance.
+        - Translate the whole utterance meaning, not word by word.
+        - If the dialect is Cantonese, preserve the source as dialect and produce natural Mandarin/target language in translation.
+        - Never copy the source dialect into translation unless the target language is the same.
         
         Segments to translate:
         \(inputLines)

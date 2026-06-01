@@ -51,19 +51,6 @@ public struct HomeView: View {
                     .padding(.horizontal)
                     .padding(.top, 14)
 
-                    VStack(alignment: .leading, spacing: 10) {
-                        Text(AppText.t("Meeting Notes", "会议字幕"))
-                            .font(.system(.headline, design: .rounded))
-                            .foregroundColor(.white)
-
-                        Text(AppText.t("Low-key live transcription and translation for dialect listening.", "低调实时识别与翻译，适合方言倾听练习。"))
-                            .font(.system(.subheadline, design: .rounded))
-                            .foregroundColor(.secondary)
-                            .fixedSize(horizontal: false, vertical: true)
-                    }
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(.horizontal)
-
                     if sessionManager.isRecordingLocally {
                         inlineListeningPanel
                             .padding(.horizontal)
@@ -88,12 +75,6 @@ public struct HomeView: View {
                             Text(AppText.t("No sessions yet", "还没有记录"))
                                 .font(.system(.body, design: .rounded))
                                 .foregroundColor(.secondary)
-                            
-                            Text(AppText.t("Start a low-key listening session when you are ready.", "准备好后开始一次低调倾听。"))
-                                .font(.system(.footnote, design: .rounded))
-                                .foregroundColor(.secondary.opacity(0.8))
-                                .multilineTextAlignment(.center)
-                                .padding(.horizontal, 40)
                         }
                         .frame(maxHeight: .infinity)
                     } else {
