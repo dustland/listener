@@ -109,18 +109,19 @@ public struct HomeView: View {
                     .clipShape(Circle())
             }
 
-            VStack(alignment: .leading, spacing: 3) {
-                Text(sessionManager.isRecordingLocally ? AppText.t("Listening quietly", "低调倾听中") : AppText.t("Start listening", "开始倾听"))
-                    .font(.system(.subheadline, design: .rounded))
-                    .fontWeight(.semibold)
-                    .foregroundColor(.white)
-                Text(sessionManager.isRecordingLocally ? sessionManager.liveTranslationStatus : "\(sessionManager.appSettings.sourceLanguage.title) · \(sessionManager.appSettings.listeningMode.title) · \(sessionManager.appSettings.micSensitivity.title)")
-                    .font(.system(.caption, design: .rounded))
-                    .foregroundColor(.secondary)
-                    .lineLimit(1)
-            }
+            Text(sessionManager.isRecordingLocally ? AppText.t("Listening", "倾听中") : AppText.t("Listen", "倾听"))
+                .font(.system(.subheadline, design: .rounded))
+                .fontWeight(.semibold)
+                .foregroundColor(.white)
 
             Spacer()
+
+            if sessionManager.isRecordingLocally {
+                Text(formatDuration(sessionManager.recorderManager.currentDuration))
+                    .font(.system(.caption, design: .monospaced))
+                    .fontWeight(.semibold)
+                    .foregroundColor(.secondary)
+            }
         }
         .padding(12)
         .background(.thinMaterial.opacity(0.35))
