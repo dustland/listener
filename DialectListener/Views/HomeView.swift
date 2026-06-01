@@ -8,7 +8,6 @@ public struct HomeView: View {
     @Environment(\.modelContext) private var modelContext
     @State private var sessionManager = SessionManager()
     @State private var selectedSessionForDetail: Session? = nil
-    @State private var isShowingSettings = false
     
     public init(settings: AppSettings = AppSettings()) {
         _sessionManager = State(initialValue: SessionManager(appSettings: settings))
@@ -48,17 +47,6 @@ public struct HomeView: View {
                         .padding(.vertical, 6)
                         .background(Color.white.opacity(0.06))
                         .clipShape(Capsule())
-
-                        Button(action: {
-                            isShowingSettings = true
-                        }) {
-                            Image(systemName: "gearshape")
-                                .font(.system(size: 18, weight: .semibold))
-                                .foregroundColor(.secondary)
-                                .frame(width: 36, height: 36)
-                                .background(Color.white.opacity(0.06))
-                                .clipShape(Circle())
-                        }
                     }
                     .padding(.horizontal)
                     .padding(.top, 14)
@@ -139,9 +127,6 @@ public struct HomeView: View {
             }
             .sheet(item: $selectedSessionForDetail) { session in
                 SessionDetailView(session: session)
-            }
-            .sheet(isPresented: $isShowingSettings) {
-                SettingsView(settings: sessionManager.appSettings)
             }
         }
     }

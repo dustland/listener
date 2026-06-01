@@ -8,12 +8,13 @@ public struct MainTabView: View {
 
     @State private var settings = AppSettings()
     @State private var selectedSection: Section = .listen
+    @State private var isShowingSettings = false
 
     public init() {}
 
     public var body: some View {
         VStack(spacing: 0) {
-            topSwitcher
+            topBar
 
             TabView(selection: $selectedSection) {
                 HomeView(settings: settings)
@@ -26,28 +27,45 @@ public struct MainTabView: View {
         }
         .background(Color.black.ignoresSafeArea())
         .tint(.cyan)
+        .sheet(isPresented: $isShowingSettings) {
+            SettingsView(settings: settings)
+        }
     }
 
-    private var topSwitcher: some View {
-        HStack(spacing: 6) {
-            switcherButton(
-                title: AppText.t("Listen", "倾听"),
-                icon: "waveform.and.mic",
-                section: .listen
+    private var topBar: some View {
+        HStack(spacing: 10) {
+            HStack(spacing: 6) {
+                switcherButton(
+                    title: AppText.t("Listen", "倾听"),
+                    icon: "waveform.and.mic",
+                    section: .listen
+                )
+                switcherButton(
+                    title: AppText.t("Chat", "畅聊"),
+                    icon: "bubble.left.and.text.bubble.right.fill",
+                    section: .chat
+                )
+            }
+            .padding(5)
+            .background(Color.white.opacity(0.06))
+            .overlay(
+                RoundedRectangle(cornerRadius: 15)
+                    .stroke(Color.white.opacity(0.08), lineWidth: 1)
             )
-            switcherButton(
-                title: AppText.t("Chat", "畅聊"),
-                icon: "bubble.left.and.text.bubble.right.fill",
-                section: .chat
-            )
+            .cornerRadius(15)
+
+            Button {
+                isShowingSettings = true
+            } label: {
+                Image(systemName: "gearshape")
+                    .font(.system(size: 18, weight: .semibold))
+                    .foregroundColor(.secondary)
+                    .frame(width: 42, height: 42)
+                    .background(Color.white.opacity(0.06))
+                    .clipShape(Circle())
+            }
+            .buttonStyle(.plain)
         }
-        .padding(5)
-        .background(Color.white.opacity(0.06))
-        .overlay(
-            RoundedRectangle(cornerRadius: 15)
-                .stroke(Color.white.opacity(0.08), lineWidth: 1)
-        )
-        .cornerRadius(15)
         .padding(.horizontal, 18)
         .padding(.top, 10)
         .padding(.bottom, 8)
