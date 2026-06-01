@@ -56,6 +56,33 @@ public final class DialectChatService {
         \(input)
         """
 
+        struct Payload: Codable {
+            let dialectText: String
+            let pronunciation: String
+            let usageNote: String
+        }
+
+        let content = try await sendChatCompletion(prompt: prompt, apiKey: apiKey, enforceJSON: true)
+        let jsonString = extractJSONObject(from: content)
+        let payload: Payload
+        do {
+            payload = try JSONDecoder().decode(Payload.self, from: Data(jsonString.utf8))
+        } catch {
+            throw NSError(
+                domain: "DialectChatService",
+                code: 500,
+                userInfo: [NSLocalizedDescriptionKey: "OpenRouter returned text that could not be parsed: \(content)"]
+            )
+        }
+        return DialectChatResult(
+            mandarinText: input,
+            dialectText: payload.dialectText,
+            pronunciation: payload.pronunciation,
+            usageNote: payload.usageNote
+        )
+    }
+
+    private func sendChatCompletion(prompt: String, apiKey: String, enforceJSON: Bool) async throws -> String {
         let url = URL(string: "https://openrouter.ai/api/v1/chat/completions")!
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
@@ -63,18 +90,34 @@ public final class DialectChatService {
         request.setValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
         request.setValue("Dialecter", forHTTPHeaderField: "X-Title")
 
-        let body: [String: Any] = [
+        var body: [String: Any] = [
             "model": model,
             "messages": [
                 ["role": "user", "content": prompt]
-            ],
-            "response_format": ["type": "json_object"]
+            ]
         ]
+        if enforceJSON {
+            body["response_format"] = ["type": "json_object"]
+        }
         request.httpBody = try JSONSerialization.data(withJSONObject: body)
 
         let (data, response) = try await URLSession.shared.data(for: request)
-        guard let httpResponse = response as? HTTPURLResponse, httpResponse.statusCode == 200 else {
-            throw NSError(domain: "DialectChatService", code: 500, userInfo: [NSLocalizedDescriptionKey: "Invalid API response from OpenRouter server."])
+        guard let httpResponse = response as? HTTPURLResponse else {
+            throw NSError(domain: "DialectChatService", code: 500, userInfo: [NSLocalizedDescriptionKey: "OpenRouter returned a non-HTTP response."])
+        }
+
+        if httpResponse.statusCode != 200 {
+            if enforceJSON {
+                logger.warning("OpenRouter rejected JSON mode with HTTP \(httpResponse.statusCode). Retrying without response_format.")
+                return try await sendChatCompletion(prompt: prompt, apiKey: apiKey, enforceJSON: false)
+            }
+
+            let bodyText = String(data: data, encoding: .utf8) ?? "Empty response body"
+            throw NSError(
+                domain: "DialectChatService",
+                code: httpResponse.statusCode,
+                userInfo: [NSLocalizedDescriptionKey: "OpenRouter \(httpResponse.statusCode): \(bodyText)"]
+            )
         }
 
         struct OpenRouterResponse: Codable {
@@ -87,24 +130,24 @@ public final class DialectChatService {
             let choices: [Choice]
         }
 
-        struct Payload: Codable {
-            let dialectText: String
-            let pronunciation: String
-            let usageNote: String
-        }
-
         let decoded = try JSONDecoder().decode(OpenRouterResponse.self, from: data)
         guard let content = decoded.choices.first?.message.content else {
             throw NSError(domain: "DialectChatService", code: 500, userInfo: [NSLocalizedDescriptionKey: "Failed to extract dialect result."])
         }
+        return content
+    }
 
-        let payload = try JSONDecoder().decode(Payload.self, from: Data(content.utf8))
-        return DialectChatResult(
-            mandarinText: input,
-            dialectText: payload.dialectText,
-            pronunciation: payload.pronunciation,
-            usageNote: payload.usageNote
-        )
+    private func extractJSONObject(from content: String) -> String {
+        let trimmed = content.trimmingCharacters(in: .whitespacesAndNewlines)
+        if trimmed.hasPrefix("{"), trimmed.hasSuffix("}") {
+            return trimmed
+        }
+
+        if let start = trimmed.firstIndex(of: "{"), let end = trimmed.lastIndex(of: "}"), start < end {
+            return String(trimmed[start...end])
+        }
+
+        return trimmed
     }
 
     private func localFallback(for input: String, target _: ChatTargetDialect) -> DialectChatResult {
