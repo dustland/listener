@@ -116,6 +116,22 @@ public enum ChatTargetDialect: String, CaseIterable, Identifiable {
         case .cantonese: "zh-HK"
         }
     }
+
+    public var styleGuidance: String {
+        switch self {
+        case .cantonese:
+            """
+            Cantonese style:
+            - Use idiomatic spoken Hong Kong Cantonese, not word-by-word Mandarin translation.
+            - Prefer short everyday phrases and natural Cantonese vocabulary.
+            - Examples:
+              Mandarin: 有空去喝茶 -> Cantonese: 得閒飲茶
+              Mandarin: 你现在在哪里 -> Cantonese: 你而家喺邊
+              Mandarin: 我没有时间 -> Cantonese: 我冇時間
+            - Avoid Mandarin-like phrasing such as 有時間就去飲茶啦 when a concise Cantonese phrase exists.
+            """
+        }
+    }
 }
 
 public enum AIModelOption: String, CaseIterable, Identifiable {

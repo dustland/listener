@@ -51,6 +51,7 @@ public final class DialectChatService {
         - Use the most natural writing system for \(target.promptName).
         - Use \(target.pronunciationSystem) for pronunciation.
         - Keep usageNote under 20 words.
+        \(target.styleGuidance)
 
         Mandarin:
         \(input)

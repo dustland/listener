@@ -6,6 +6,7 @@ public struct ChatView: View {
     @State private var inputText = ""
     @State private var result: DialectChatResult?
     @State private var isTranslating = false
+    @State private var isPressingVoice = false
     @State private var statusText: String?
     @State private var dictationManager = MandarinDictationManager()
     @State private var speechSynthesizer = AVSpeechSynthesizer()
@@ -88,64 +89,75 @@ public struct ChatView: View {
 
     private var inputPanel: some View {
         VStack(alignment: .leading, spacing: 8) {
-            TextEditor(text: $inputText)
-                .font(.system(.body, design: .rounded))
-                .foregroundColor(.white)
-                .scrollContentBackground(.hidden)
-                .frame(minHeight: 54, maxHeight: 110)
-                .padding(10)
-                .background(Color.white.opacity(0.05))
-                .overlay(
-                    RoundedRectangle(cornerRadius: 16)
-                        .stroke(Color.white.opacity(0.08), lineWidth: 1)
-                )
-                .cornerRadius(16)
-                .overlay(alignment: .topLeading) {
-                    if inputText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                        Text(AppText.t("Type Mandarin here, or tap the mic.", "输入普通话，或点麦克风说一句。"))
-                            .font(.system(.body, design: .rounded))
-                            .foregroundColor(.secondary)
-                            .padding(.horizontal, 16)
-                            .padding(.vertical, 18)
-                            .allowsHitTesting(false)
+            HStack(alignment: .bottom, spacing: 10) {
+                TextEditor(text: $inputText)
+                    .font(.system(.body, design: .rounded))
+                    .foregroundColor(.white)
+                    .scrollContentBackground(.hidden)
+                    .frame(minHeight: 42, maxHeight: 104)
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 8)
+                    .background(Color.white.opacity(0.05))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 18)
+                            .stroke(isPressingVoice ? Color.cyan.opacity(0.6) : Color.white.opacity(0.08), lineWidth: 1)
+                    )
+                    .cornerRadius(18)
+                    .overlay(alignment: .topLeading) {
+                        if inputText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                            Text(isPressingVoice ? AppText.t("Release to send", "松开发送") : AppText.t("Type, or hold the mic to speak.", "输入文字，或按住麦克风说话。"))
+                                .font(.system(.body, design: .rounded))
+                                .foregroundColor(.secondary)
+                                .padding(.horizontal, 16)
+                                .padding(.vertical, 16)
+                                .allowsHitTesting(false)
+                        }
                     }
-                }
+
+                inputActionButton
+            }
 
             if let statusText {
                 Text(statusText)
                     .font(.system(.caption, design: .rounded))
                     .foregroundColor(.secondary)
             }
+        }
+    }
 
-            HStack(spacing: 12) {
-                Button(action: toggleDictation) {
-                    Image(systemName: dictationManager.isRecording ? "stop.fill" : "mic.fill")
-                        .font(.system(size: 16, weight: .bold))
-                        .foregroundColor(dictationManager.isRecording ? .red : .cyan)
-                        .frame(width: 44, height: 44)
-                        .background(Color.white.opacity(0.08))
-                        .clipShape(Circle())
-                }
-
-                Button(action: translate) {
-                    HStack(spacing: 8) {
-                        if isTranslating {
-                            ProgressView()
-                                .tint(.black)
-                        } else {
-                            Image(systemName: "arrow.right.circle.fill")
-                        }
-                        Text(AppText.t("Send", "发送"))
-                            .fontWeight(.bold)
-                    }
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 12)
-                    .background(canTranslate ? Color.cyan : Color.white.opacity(0.08))
-                    .foregroundColor(canTranslate ? .black : .secondary)
-                    .cornerRadius(14)
-                }
-                .disabled(!canTranslate)
+    @ViewBuilder
+    private var inputActionButton: some View {
+        if isTranslating {
+            ProgressView()
+                .tint(.black)
+                .frame(width: 44, height: 44)
+                .background(Color.cyan)
+                .clipShape(Circle())
+        } else if canTranslate {
+            Button(action: translate) {
+                Image(systemName: "arrow.up")
+                    .font(.system(size: 18, weight: .bold))
+                    .foregroundColor(.black)
+                    .frame(width: 44, height: 44)
+                    .background(Color.cyan)
+                    .clipShape(Circle())
             }
+        } else {
+            Image(systemName: isPressingVoice ? "waveform" : "mic.fill")
+                .font(.system(size: 17, weight: .bold))
+                .foregroundColor(isPressingVoice ? .black : .cyan)
+                .frame(width: 44, height: 44)
+                .background(isPressingVoice ? Color.cyan : Color.white.opacity(0.08))
+                .clipShape(Circle())
+                .gesture(
+                    DragGesture(minimumDistance: 0)
+                        .onChanged { _ in
+                            beginVoiceMessage()
+                        }
+                        .onEnded { _ in
+                            finishVoiceMessage()
+                        }
+                )
         }
     }
 
@@ -218,26 +230,47 @@ public struct ChatView: View {
         !isTranslating && !inputText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     }
 
-    private func toggleDictation() {
-        if dictationManager.isRecording {
-            dictationManager.stop()
-            statusText = nil
-            return
-        }
+    private func beginVoiceMessage() {
+        guard !isPressingVoice, !dictationManager.isRecording else { return }
+        isPressingVoice = true
+        inputText = ""
+        statusText = AppText.t("Listening for Mandarin...", "正在听普通话...")
 
         Task {
             let granted = await dictationManager.requestAuthorization()
             guard granted else {
-                statusText = AppText.t("Microphone or speech permission is missing.", "缺少麦克风或语音识别权限。")
+                await MainActor.run {
+                    isPressingVoice = false
+                    statusText = AppText.t("Microphone or speech permission is missing.", "缺少麦克风或语音识别权限。")
+                }
                 return
             }
 
             do {
-                dictationManager.transcript = inputText
                 try dictationManager.start()
-                statusText = AppText.t("Listening for Mandarin...", "正在听普通话...")
             } catch {
-                statusText = error.localizedDescription
+                await MainActor.run {
+                    isPressingVoice = false
+                    statusText = error.localizedDescription
+                }
+            }
+        }
+    }
+
+    private func finishVoiceMessage() {
+        guard isPressingVoice else { return }
+        isPressingVoice = false
+        dictationManager.stop()
+
+        Task {
+            try? await Task.sleep(for: .milliseconds(250))
+            await MainActor.run {
+                let spokenText = inputText.trimmingCharacters(in: .whitespacesAndNewlines)
+                guard !spokenText.isEmpty else {
+                    statusText = AppText.t("No Mandarin recognized.", "没有识别到普通话。")
+                    return
+                }
+                translate()
             }
         }
     }
@@ -270,8 +303,21 @@ public struct ChatView: View {
     private func speakResult() {
         guard let result else { return }
         speechSynthesizer.stopSpeaking(at: .immediate)
+        do {
+            let session = AVAudioSession.sharedInstance()
+            try session.setCategory(.playback, mode: .spokenAudio, options: [.duckOthers])
+            try session.setActive(true)
+        } catch {
+            statusText = error.localizedDescription
+            return
+        }
+
         let utterance = AVSpeechUtterance(string: result.dialectText)
-        utterance.voice = AVSpeechSynthesisVoice(language: settings.chatTargetDialect.speechLocaleIdentifier)
+        guard let voice = AVSpeechSynthesisVoice(language: settings.chatTargetDialect.speechLocaleIdentifier) else {
+            statusText = AppText.t("No compatible system voice found.", "没有找到可用的系统语音。")
+            return
+        }
+        utterance.voice = voice
         utterance.rate = 0.45
         speechSynthesizer.speak(utterance)
     }
