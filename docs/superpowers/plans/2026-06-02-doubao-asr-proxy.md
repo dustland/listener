@@ -1,16 +1,28 @@
-# Doubao ASR Proxy Implementation Plan
+# Doubao ASR Direct SDK Implementation Plan
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Replace Apple Speech as the primary listening ASR path with a Doubao/Volcengine streaming ASR service accessed through a server-side proxy.
+**Goal:** Replace Apple Speech as the primary listening ASR path with direct Doubao/Volcengine iOS streaming ASR SDK access.
 
-**Architecture:** The iOS app captures low-processed microphone audio and streams short PCM/Opus frames to a first-party WebSocket proxy. The proxy owns Volcengine credentials, translates app audio frames into Volcengine BigModel Streaming ASR binary WebSocket frames, and streams finalized sentence events back to the app. Apple Speech remains an explicit fallback only.
+**Architecture:** The iOS app uses the Volcengine/Doubao Speech SDK as the primary streaming ASR engine for listening mode. Build-time GitHub Secrets inject the Doubao AppID, Access Token, and Resource ID into the app for TestFlight validation. Apple Speech remains an explicit fallback only; a proxy can be added later if public distribution requires quota control or provider switching.
 
-**Tech Stack:** Swift/SwiftUI, AVAudioEngine, URLSessionWebSocketTask, Cloudflare Workers or a small Node service, Volcengine Doubao BigModel Streaming ASR.
+**Tech Stack:** Swift/SwiftUI, AVAudioEngine, CocoaPods, `SpeechEngineAsrToB` or `SpeechEngineToB`, Volcengine Doubao BigModel Streaming ASR.
 
 ---
 
-### Task 1: Add ASR Provider Settings
+### Task 1: Add Build-Time Doubao ASR Secrets
+
+**Files:**
+- Modify: `.github/workflows/testflight.yml`
+- Modify: `DialectListener/Info.plist`
+- Modify: `DEPLOYMENT.md`
+
+- [x] Add `DOUBAO_ASR_APP_ID`, `DOUBAO_ASR_ACCESS_TOKEN`, and `DOUBAO_ASR_RESOURCE_ID` build settings.
+- [x] Inject those build settings into `Info.plist`.
+- [x] Validate the required secrets in GitHub Actions.
+- [x] Document where each secret comes from and whether the token needs a `Bearer;` prefix.
+
+### Task 2: Add ASR Provider Settings
 
 **Files:**
 - Modify: `DialectListener/Models/AppSettings.swift`
@@ -19,9 +31,10 @@
 - [ ] Add `ASRProvider` enum with `doubao`, `aliyun`, and `appleFallback`.
 - [ ] Add persisted `asrProvider` and `asrProxyURL` settings.
 - [ ] Add a Settings section named `ASR` with provider picker and proxy URL text field.
-- [ ] Default provider to `doubao`; default proxy URL to an empty string so the app can show a configuration error instead of silently using Apple Speech.
+- [ ] Default provider to `doubao`.
+- [ ] Keep Apple fallback available for no-network or SDK failures, but label it clearly as fallback.
 
-### Task 2: Define Streaming ASR Event Model
+### Task 3: Define Streaming ASR Event Model
 
 **Files:**
 - Create: `DialectListener/Services/StreamingASRService.swift`
@@ -32,20 +45,34 @@
 - [ ] Define `StreamingASRServiceProtocol` with `requestAuthorization()`, `start(onEvent:onError:)`, `appendAudioBuffer(_:)`, and `stop()`.
 - [ ] Wrap `AppleASRService` in an `AppleFallbackStreamingASRService` adapter so fallback has the same event interface.
 
-### Task 3: Add Doubao Proxy Client In iOS
+### Task 4: Add Doubao SDK Dependency
 
 **Files:**
-- Create: `DialectListener/Services/DoubaoProxyASRService.swift`
+- Create: `Podfile`
+- Modify: `.github/workflows/testflight.yml`
+
+- [ ] Add CocoaPods sources `https://github.com/CocoaPods/Specs.git` and `https://github.com/volcengine/volcengine-specs.git`.
+- [ ] Add the Volcengine ASR SDK pod. Prefer `SpeechEngineAsrToB`; use `SpeechEngineToB` only if the BigModel ASR SDK sample requires it.
+- [ ] Add required network dependency if the selected SDK version requires `SocketRocket`.
+- [ ] Run `pod install --repo-update` in GitHub Actions before archive.
+- [ ] Change archive/export commands to build the generated workspace if CocoaPods creates one.
+
+### Task 5: Add Doubao Direct ASR Client In iOS
+
+**Files:**
+- Create: `DialectListener/Services/DoubaoSDKASRService.swift`
+- Modify: `DialectListener/App/DialectListenerApp.swift`
 - Modify: `DialectListener/Managers/SessionManager.swift`
 
-- [ ] Implement `URLSessionWebSocketTask` connection to `asrProxyURL`.
-- [ ] Send a JSON `start` message with sample rate, language hints, and session ID.
-- [ ] Convert incoming `AVAudioPCMBuffer` frames to 16 kHz mono PCM frames before sending.
-- [ ] Send binary audio frames at 100-200 ms cadence.
-- [ ] Decode proxy events into `StreamingASREvent`.
-- [ ] On missing proxy URL, surface `请先配置 ASR 服务` and do not start fake listening.
+- [ ] Call `SpeechEngine.prepareEnvironment()` once during app startup.
+- [ ] Read `DoubaoASRAppID`, `DoubaoASRAccessToken`, and `DoubaoASRResourceID` from `Info.plist`.
+- [ ] Configure SDK endpoint `wss://openspeech.bytedance.com` and URI `/api/v3/sauc/bigmodel`.
+- [ ] Configure protocol type as Seed.
+- [ ] Configure `SE_PARAMS_KEY_ASR_REQ_PARAMS_STRING` with natural sentence cutting, punctuation, and language/mixed Chinese dialect hints where supported.
+- [ ] Emit partial events as `recognizing` and final sentence events as `recognized`.
+- [ ] If SDK configuration is missing or init fails, surface the error and optionally offer Apple fallback.
 
-### Task 4: Update Session Message Pipeline
+### Task 6: Update Session Message Pipeline
 
 **Files:**
 - Modify: `DialectListener/Managers/SessionManager.swift`
@@ -60,22 +87,18 @@
 - [ ] If ASR language is Mandarin, convert to Cantonese.
 - [ ] If ASR language is unknown, display original text without forced translation.
 
-### Task 5: Implement ASR Proxy
+### Task 7: Optional Proxy Later
 
 **Files:**
 - Create: `services/asr-proxy/package.json`
 - Create: `services/asr-proxy/src/index.ts`
 - Create: `services/asr-proxy/README.md`
 
-- [ ] Accept WebSocket connections from the iOS app.
-- [ ] Require a shared app token before opening upstream ASR.
-- [ ] Connect to Volcengine endpoint `wss://openspeech.bytedance.com/api/v3/sauc/bigmodel`.
-- [ ] Use server-side environment variables for `VOLCENGINE_APP_ID` and `VOLCENGINE_ACCESS_TOKEN`.
-- [ ] Translate app `start` and audio frames into Volcengine full client request / audio only request frames.
-- [ ] Normalize Volcengine partial/final ASR responses into app JSON events.
-- [ ] Keep the proxy provider-neutral enough to add Aliyun later.
+- [ ] Defer until the direct SDK path proves ASR quality.
+- [ ] Use this only for public distribution, quota control, or provider switching.
+- [ ] Keep the app/provider protocol compatible with the direct SDK event model.
 
-### Task 6: Verification
+### Task 8: Verification
 
 **Files:**
 - Modify as needed from previous tasks.
@@ -85,7 +108,7 @@
 - [ ] Run GitHub Actions TestFlight workflow.
 - [ ] Test on iPhone with three scenarios: nearby self speech, table-distance Cantonese, table-distance Mandarin.
 - [ ] Confirm Apple Speech is not used when ASR provider is `doubao`.
-- [ ] Confirm missing proxy URL fails visibly instead of silently using local ASR.
+- [ ] Confirm missing Doubao credentials fail visibly instead of silently using local ASR.
 
 ---
 
@@ -93,5 +116,4 @@
 
 - Volcengine/Doubao Speech AppID.
 - Volcengine/Doubao Speech Access Token.
-- Confirmation whether the proxy should be Cloudflare Workers, Vercel, or a small Node service on another host.
-- Optional shared app token for app-to-proxy authentication.
+- Volcengine/Doubao BigModel ASR Resource ID, usually `volc.bigasr.sauc.duration`.
