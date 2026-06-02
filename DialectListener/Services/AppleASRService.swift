@@ -73,8 +73,8 @@ public final class AppleASRService: ASRServiceProtocol {
         
         let request = SFSpeechURLRecognitionRequest(url: audioURL)
         request.shouldReportPartialResults = false
-        // Request on-device offline recognition to protect privacy and run without cellular network
-        request.requiresOnDeviceRecognition = true
+        request.taskHint = .dictation
+        request.addsPunctuation = true
         
         logger.info("Starting dialect ASR for file: \(audioURL.lastPathComponent)")
         
@@ -131,9 +131,8 @@ public final class AppleASRService: ASRServiceProtocol {
 
         let request = SFSpeechAudioBufferRecognitionRequest()
         request.shouldReportPartialResults = true
-        if recognizer.supportsOnDeviceRecognition {
-            request.requiresOnDeviceRecognition = true
-        }
+        request.taskHint = .dictation
+        request.addsPunctuation = true
 
         liveRecognitionRequest = request
         liveRecognitionTask = recognizer.recognitionTask(with: request) { [weak self] result, error in

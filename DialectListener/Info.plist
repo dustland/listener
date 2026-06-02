@@ -29,7 +29,7 @@
 	<key>NSMicrophoneUsageDescription</key>
 	<string>We need microphone access to record surrounding dialect conversations for listening exercises.</string>
 	<key>NSSpeechRecognitionUsageDescription</key>
-	<string>We need speech recognition permission to transcribe dialect conversations on-device.</string>
+	<string>We need speech recognition permission to transcribe dialect conversations while you listen.</string>
 	<key>OpenRouterAPIKey</key>
 	<string>$(OPENROUTER_API_KEY)</string>
 	<key>UIBackgroundModes</key>

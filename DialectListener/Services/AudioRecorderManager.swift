@@ -75,6 +75,11 @@ public final class AudioRecorderManager {
                 micSensitivity: micSensitivity
             )
             try audioSession.setActive(true)
+            configureFarFieldInputIfNeeded(
+                audioSession,
+                listeningMode: listeningMode,
+                micSensitivity: micSensitivity
+            )
         } catch {
             logger.error("Failed to configure AVAudioSession: \(error.localizedDescription)")
             throw AudioRecordingError.failedToInitializeSession
@@ -165,8 +170,10 @@ public final class AudioRecorderManager {
             try audioSession.setCategory(.record, mode: .spokenAudio, options: [.allowBluetoothHFP])
         case .ambient, .meeting:
             // Measurement mode keeps the raw microphone signal closer to what distant
-            // speech recognition and saved review audio need.
-            try audioSession.setCategory(.record, mode: .measurement, options: [.allowBluetoothHFP])
+            // speech recognition and saved review audio need. Do not allow Bluetooth
+            // HFP here: headset mics commonly apply close-talk beamforming/noise
+            // suppression, which is exactly what makes nearby voices disappear.
+            try audioSession.setCategory(.record, mode: .measurement, options: [])
         }
 
         switch micSensitivity {
@@ -180,6 +187,52 @@ public final class AudioRecorderManager {
             try audioSession.setPreferredSampleRate(48_000)
             try audioSession.setPreferredIOBufferDuration(0.02)
         }
+    }
+
+    private func configureFarFieldInputIfNeeded(
+        _ audioSession: AVAudioSession,
+        listeningMode: ListeningMode,
+        micSensitivity: MicSensitivity
+    ) {
+        guard listeningMode != .standard else {
+            applyInputGain(audioSession, micSensitivity: micSensitivity)
+            return
+        }
+
+        if let builtInMic = audioSession.availableInputs?.first(where: { $0.portType == .builtInMic }) {
+            try? audioSession.setPreferredInput(builtInMic)
+            configureWidePickupPattern(for: builtInMic)
+        }
+
+        applyInputGain(audioSession, micSensitivity: micSensitivity)
+    }
+
+    private func configureWidePickupPattern(for input: AVAudioSessionPortDescription) {
+        let usableSources = input.dataSources ?? []
+        let preferredSource = usableSources.first { source in
+            source.supportedPolarPatterns?.contains(.omnidirectional) == true
+        } ?? usableSources.first
+
+        guard let preferredSource else { return }
+
+        try? preferredSource.setPreferredPolarPattern(.omnidirectional)
+        try? input.setPreferredDataSource(preferredSource)
+    }
+
+    private func applyInputGain(_ audioSession: AVAudioSession, micSensitivity: MicSensitivity) {
+        guard audioSession.isInputGainSettable else { return }
+
+        let gain: Float
+        switch micSensitivity {
+        case .low:
+            gain = 0.45
+        case .medium:
+            gain = 0.7
+        case .high:
+            gain = 1.0
+        }
+
+        try? audioSession.setInputGain(gain)
     }
 
     private func bufferSize(for sensitivity: MicSensitivity) -> AVAudioFrameCount {
