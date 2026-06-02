@@ -4,7 +4,7 @@
 
 **Goal:** Replace Apple Speech as the primary listening ASR path with direct Doubao/Volcengine iOS streaming ASR SDK access.
 
-**Architecture:** The iOS app uses the Volcengine/Doubao Speech SDK as the primary streaming ASR engine for listening mode. Build-time GitHub Secrets inject the Doubao AppID, Access Token, and Resource ID into the app for TestFlight validation. Apple Speech remains an explicit fallback only; a proxy can be added later if public distribution requires quota control or provider switching.
+**Architecture:** The iOS app uses the Volcengine/Doubao Seed ASR streaming API as the primary ASR engine for listening mode. Build-time GitHub Secrets inject the Doubao API Key and Resource ID into the app for TestFlight validation. Apple Speech remains an explicit fallback only; a proxy can be added later if public distribution requires quota control or provider switching.
 
 **Tech Stack:** Swift/SwiftUI, AVAudioEngine, CocoaPods, `SpeechEngineAsrToB` or `SpeechEngineToB`, Volcengine Doubao BigModel Streaming ASR.
 
@@ -17,10 +17,10 @@
 - Modify: `DialectListener/Info.plist`
 - Modify: `DEPLOYMENT.md`
 
-- [x] Add `DOUBAO_ASR_APP_ID`, `DOUBAO_ASR_ACCESS_TOKEN`, and `DOUBAO_ASR_RESOURCE_ID` build settings.
+- [x] Add `DOUBAO_ASR_API_KEY` and `DOUBAO_ASR_RESOURCE_ID` build settings.
 - [x] Inject those build settings into `Info.plist`.
 - [x] Validate the required secrets in GitHub Actions.
-- [x] Document where each secret comes from and whether the token needs a `Bearer;` prefix.
+- [x] Document that the new console uses `X-Api-Key`, not the old AppID/Access Token pair.
 
 ### Task 2: Add ASR Provider Settings
 
@@ -65,8 +65,9 @@
 - Modify: `DialectListener/Managers/SessionManager.swift`
 
 - [ ] Call `SpeechEngine.prepareEnvironment()` once during app startup.
-- [ ] Read `DoubaoASRAppID`, `DoubaoASRAccessToken`, and `DoubaoASRResourceID` from `Info.plist`.
+- [ ] Read `DoubaoASRAPIKey` and `DoubaoASRResourceID` from `Info.plist`.
 - [ ] Configure SDK endpoint `wss://openspeech.bytedance.com` and URI `/api/v3/sauc/bigmodel`.
+- [ ] Authenticate new-console requests with `X-Api-Key` and `X-Api-Resource-Id`; use the old `X-Api-App-Key`/`X-Api-Access-Key` pair only if the selected SDK requires legacy console credentials.
 - [ ] Configure protocol type as Seed.
 - [ ] Configure `SE_PARAMS_KEY_ASR_REQ_PARAMS_STRING` with natural sentence cutting, punctuation, and language/mixed Chinese dialect hints where supported.
 - [ ] Emit partial events as `recognizing` and final sentence events as `recognized`.
@@ -114,6 +115,5 @@
 
 ## Required External Inputs
 
-- Volcengine/Doubao Speech AppID.
-- Volcengine/Doubao Speech Access Token.
-- Volcengine/Doubao BigModel ASR Resource ID, usually `volc.bigasr.sauc.duration`.
+- Volcengine/Doubao Speech API Key.
+- Volcengine/Doubao Seed ASR 2.0 Resource ID, usually `volc.seedasr.sauc.duration`.

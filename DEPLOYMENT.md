@@ -17,9 +17,8 @@ Add these repository secrets:
 - `APP_STORE_CONNECT_API_ISSUER_ID`: the App Store Connect issuer ID.
 - `APP_STORE_CONNECT_API_PRIVATE_KEY`: the full contents of the downloaded `.p8` key file.
 - `OPENROUTER_API_KEY`: OpenRouter key used for dialect conversion.
-- `DOUBAO_ASR_APP_ID`: Volcengine/Doubao Speech AppID for direct ASR SDK access.
-- `DOUBAO_ASR_ACCESS_TOKEN`: Volcengine/Doubao Speech access token. Store the raw token value; the current BigModel ASR SDK configuration does not add the `Bearer;` prefix.
-- `DOUBAO_ASR_RESOURCE_ID`: Volcengine/Doubao ASR resource ID. Use `volc.bigasr.sauc.duration` unless the speech console shows a different resource ID for your enabled package.
+- `DOUBAO_ASR_API_KEY`: Volcengine/Doubao Speech API key from the new console.
+- `DOUBAO_ASR_RESOURCE_ID`: Volcengine/Doubao ASR resource ID. For Seed ASR 2.0 hourly billing, use `volc.seedasr.sauc.duration`.
 
 Optional repository variables:
 

@@ -32,10 +32,8 @@
 	<string>We need speech recognition permission to transcribe dialect conversations while you listen.</string>
 	<key>OpenRouterAPIKey</key>
 	<string>$(OPENROUTER_API_KEY)</string>
-	<key>DoubaoASRAppID</key>
-	<string>$(DOUBAO_ASR_APP_ID)</string>
-	<key>DoubaoASRAccessToken</key>
-	<string>$(DOUBAO_ASR_ACCESS_TOKEN)</string>
+	<key>DoubaoASRAPIKey</key>
+	<string>$(DOUBAO_ASR_API_KEY)</string>
 	<key>DoubaoASRResourceID</key>
 	<string>$(DOUBAO_ASR_RESOURCE_ID)</string>
 	<key>UIBackgroundModes</key>
